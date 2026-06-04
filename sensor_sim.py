@@ -13,6 +13,9 @@ SIM_USERS = [
     ("SIM-TARA", "SIM-1006"),
 ]
 
+RANDOM_SENSOR_INTERVAL_SECONDS = 30
+MIN_RANDOM_PARK_SECONDS = 90
+
 
 def ensure_sim_users(cursor):
     user_ids = []
@@ -81,6 +84,8 @@ def create_random_hourly_reservations(cursor, now):
 
 def simulate_environment():
     print("IoT Smart Environment & Conflict Resolution Manager Activated...")
+    physical_parked_since = {}
+    last_random_sensor_at = datetime.min
     
     while True:
         conn = sqlite3.connect('parking.db')
@@ -107,33 +112,50 @@ def simulate_environment():
             cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (spot_id,))
             
         # ۴. سنسور رندوم (عدم اجازه ورود به جایگاه‌هایی که در ۱ دقیقه آینده رزرو دارند)
-        buffer_time = (now + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S')
-        cursor.execute("""
-            SELECT id FROM Parking_Spots WHERE id NOT IN (
-                SELECT spot_id FROM Reservations
-                WHERE status = 'Active'
-                AND start_time <= ?
-                AND end_time > ?
-            )
-        """, (buffer_time, now_str))
-        free_spots = [row[0] for row in cursor.fetchall()]
-        
-        if free_spots:
-            random_spot = random.choice(free_spots)
-            cursor.execute("SELECT is_occupied FROM Parking_Spots WHERE id = ?", (random_spot,))
-            res = cursor.fetchone()
-            if res:
-                new_status = 1 if res[0] == 0 else 0
-                cursor.execute("UPDATE Parking_Spots SET is_occupied = ? WHERE id = ?", (new_status, random_spot))
-                if new_status == 0:
-                    cursor.execute("""
-                        UPDATE Reservations
-                        SET status = 'Completed'
-                        WHERE status = 'Active'
-                        AND spot_id = ?
-                        AND start_time <= ?
-                        AND end_time > ?
-                    """, (random_spot, now_str, now_str))
+        if (now - last_random_sensor_at).total_seconds() >= RANDOM_SENSOR_INTERVAL_SECONDS:
+            last_random_sensor_at = now
+            buffer_time = (now + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S')
+
+            cursor.execute("""
+                SELECT id FROM Parking_Spots
+                WHERE is_occupied = 0
+                AND id NOT IN (
+                    SELECT spot_id FROM Reservations
+                    WHERE status = 'Active'
+                    AND start_time <= ?
+                    AND end_time > ?
+                )
+            """, (buffer_time, now_str))
+            entry_candidates = [row[0] for row in cursor.fetchall()]
+
+            cursor.execute("""
+                SELECT id FROM Parking_Spots
+                WHERE is_occupied = 1
+                AND id NOT IN (
+                    SELECT spot_id FROM Reservations
+                    WHERE status = 'Active'
+                    AND start_time <= ?
+                    AND end_time > ?
+                )
+            """, (buffer_time, now_str))
+            occupied_random_candidates = [row[0] for row in cursor.fetchall()]
+
+            for spot_id in occupied_random_candidates:
+                physical_parked_since.setdefault(spot_id, now)
+
+            exit_candidates = [
+                spot_id for spot_id in occupied_random_candidates
+                if (now - physical_parked_since.get(spot_id, now)).total_seconds() >= MIN_RANDOM_PARK_SECONDS
+            ]
+
+            if entry_candidates and (not exit_candidates or random.random() < 0.7):
+                random_spot = random.choice(entry_candidates)
+                cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (random_spot,))
+                physical_parked_since[random_spot] = now
+            elif exit_candidates:
+                random_spot = random.choice(exit_candidates)
+                cursor.execute("UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?", (random_spot,))
+                physical_parked_since.pop(random_spot, None)
         
         conn.commit()
         conn.close()

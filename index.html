@@ -3,197 +3,291 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IoT Dynamic Smart Parking</title>
-    <link rel="stylesheet" href="style.css">
+    <title>IoT 3D Smart Parking</title>
     <style>
-        .panel-box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 25px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto; }
-        .panel-box h2 { color: #2c3e50; margin-top: 0; margin-bottom: 15px; font-size: 1.4rem; text-align: center; }
-        .form-group { display: flex; flex-direction: column; width: 100%; margin-bottom: 10px; }
-        .form-row { display: flex; flex-wrap: wrap; gap: 15px; justify-content: space-between; }
-        .form-row .form-group { width: 48%; }
-        .form-group label { font-weight: 600; margin-bottom: 5px; color: #34495e; font-size: 0.9rem; }
-        .form-group input, .form-group select { padding: 8px 12px; border: 1px solid #bdc3c7; border-radius: 6px; font-family: inherit; font-size: 0.9rem; }
-        .btn-submit { width: 100%; background-color: #3498db; color: white; border: none; padding: 10px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; font-size: 1rem; margin-top: 5px; }
-        .btn-submit:hover { background-color: #2980b9; }
-        .btn-secondary { background-color: #95a5a6; margin-top: 10px; }
-        .btn-secondary:hover { background-color: #7f8c8d; }
-        .form-message { width: 100%; margin-top: 10px; font-weight: bold; text-align: center; font-size: 0.95rem; }
-        .msg-success { color: #2ecc71; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: #ebdcd0;
+            color: #263746;
+        }
+        .container { width: min(1760px, calc(100% - 28px)); margin: 0 auto; padding: 18px 0 28px; }
+        header { text-align: center; margin-bottom: 14px; }
+        header h1 { margin: 0 0 4px; font-size: clamp(1.7rem, 3vw, 2.5rem); }
+        header p { margin: 0; color: #6b7280; font-weight: 600; }
+        .app-grid { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 24px; align-items: start; }
+        .panel-stack { display: grid; gap: 12px; min-width: 0; position: relative; z-index: 2; }
+        .panel-box {
+            background: rgba(255,255,255,0.88);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 8px;
+            box-shadow: 0 14px 28px rgba(80, 63, 52, 0.12);
+            padding: 16px;
+        }
+        .panel-box h2, .panel-box h3 { margin: 0 0 12px; color: #2c3e50; text-align: center; }
+        .panel-box h2 { font-size: 1.22rem; }
+        .panel-box h3 { font-size: 1rem; border-bottom: 1px solid #d9e1e8; padding-bottom: 6px; text-align: left; }
+        .form-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .form-group { flex: 1 1 145px; display: flex; flex-direction: column; margin-bottom: 9px; }
+        .form-group.full { flex-basis: 100%; }
+        label { font-weight: 700; margin-bottom: 5px; color: #34495e; font-size: 0.88rem; }
+        input, select {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            font: inherit;
+            background: white;
+        }
+        button {
+            border: none;
+            border-radius: 6px;
+            padding: 9px 12px;
+            font: inherit;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.16s ease, background-color 0.16s ease;
+        }
+        button:hover { transform: translateY(-1px); }
+        .btn-submit { width: 100%; color: white; background: #3498db; }
+        .btn-submit:hover { background: #2980b9; }
+        .btn-secondary { background: #95a5a6; margin-top: 8px; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-pay { display: none; background: #16a085; }
+        .btn-pay:hover { background: #138d75; }
+        .btn-danger { background: #e74c3c; color: white; padding: 7px 9px; font-size: 0.82rem; }
+        .btn-danger:hover { background: #c0392b; }
+        .spot-btn { background: #2ecc71; color: white; min-width: 128px; }
+        .spot-btn:hover { background: #27ae60; }
+        .form-message { min-height: 20px; margin-top: 8px; font-weight: 800; text-align: center; font-size: 0.92rem; }
+        .msg-success { color: #16a085; }
         .msg-error { color: #e74c3c; }
         #reservation-panel, #register-panel, #user-welcome, #admin-panel { display: none; }
-        .vip-label { position: absolute; top: 40px; left: 50%; transform: translate(-50%, -50%) rotate(-90deg); color: #fff; font-size: 11px; font-weight: bold; white-space: nowrap; background: #2c3e50; padding: 2px 6px; border-radius: 4px; border: 1px solid #f1c40f; z-index: 10; }
-        .spot-btn { background-color: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        .spot-btn:hover { background-color: #27ae60; transform: scale(1.05); }
-        .pricing-box { display: none; margin-top: 15px; padding: 12px; background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 6px; color: #2c3e50; text-align: center; }
-        .pricing-box strong { color: #16a085; font-size: 1.15rem; }
-        .pricing-note { margin-top: 6px; color: #64748b; font-size: 0.9rem; line-height: 1.5; }
-        .btn-pay { display: none; background-color: #16a085; }
-        .btn-pay:hover { background-color: #138d75; }
-        .btn-danger { background-color: #e74c3c; padding: 7px 10px; font-size: 0.85rem; }
-        .btn-danger:hover { background-color: #c0392b; }
-        .wallet-box { margin-bottom: 15px; padding: 12px; background: #eefaf6; border: 1px solid #bde9dc; border-radius: 6px; text-align: center; color: #2c3e50; }
-        .wallet-box strong { color: #16a085; font-size: 1.2rem; }
+        #user-welcome { margin: 0; text-align: center; }
+        .wallet-box, .pricing-box {
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #f8fafc;
+            border: 1px solid #dbe4ee;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .wallet-box strong, .pricing-box strong { color: #16a085; font-size: 1.18rem; }
+        .pricing-box { display: none; color: #2c3e50; }
+        .pricing-note { margin-top: 6px; color: #64748b; font-size: 0.88rem; line-height: 1.5; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+        th { background: #34495e; color: white; text-align: left; padding: 8px; white-space: nowrap; }
+        td { border-bottom: 1px solid #d9e1e8; padding: 8px; white-space: nowrap; }
+        .stats-container { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
+        .stat-box {
+            background: rgba(255,255,255,0.9);
+            padding: 9px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            font-weight: 800;
+        }
+        #available-spots { color: #16a085; }
+        .scene-panel { position: sticky; top: 14px; min-width: 0; z-index: 1; }
+        #scene-shell {
+            position: relative;
+            height: min(72vh, 690px);
+            min-height: 520px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #ebdcd0;
+            border: 1px solid rgba(80, 63, 52, 0.16);
+            box-shadow: 0 22px 45px rgba(80, 63, 52, 0.18);
+        }
+        #three-canvas { display: block; width: 100%; height: 100%; }
+        .scene-label {
+            position: absolute;
+            top: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.72);
+            font-weight: 900;
+            color: #34495e;
+            pointer-events: none;
+        }
+        .scene-label.entrance { left: 14px; border-left: 5px solid #2ecc71; }
+        .scene-label.exit { right: 14px; border-right: 5px solid #e74c3c; }
+        .car-name-label {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.86);
+            border: 1px solid rgba(38,55,70,0.14);
+            color: #263746;
+            font-size: 0.78rem;
+            font-weight: 900;
+            white-space: nowrap;
+            pointer-events: none;
+            box-shadow: 0 8px 18px rgba(38,55,70,0.14);
+            z-index: 3;
+        }
+        #available-spots-container { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
+        @media (max-width: 1280px) {
+            .app-grid { grid-template-columns: 1fr; }
+            .scene-panel { position: static; }
+        }
+        @media (max-width: 900px) {
+            .app-grid { grid-template-columns: 1fr; }
+            .scene-panel { position: static; }
+            #scene-shell { height: 560px; min-height: 460px; }
+        }
     </style>
 </head>
 <body>
-
     <div class="container">
         <header>
             <h1>IoT Smart Parking Simulation</h1>
-            <p>Live Animated Application Layer Monitoring</p>
+            <p>3D Clay Animated Application Layer Monitoring</p>
         </header>
 
-        <div class="panel-box" id="login-panel">
-            <h2>User Login</h2>
-            <form id="login-form">
-                <div class="form-group"><label>Username:</label><input type="text" id="login_username" required></div>
-                <div class="form-group"><label>Password:</label><input type="password" id="login_password" required></div>
-                <button type="submit" class="btn-submit">Login</button>
-                <button type="button" class="btn-submit btn-secondary" onclick="toggleAuthPanel('register')">Create New Account</button>
-            </form>
-            <div id="login-message" class="form-message"></div>
-        </div>
-
-        <div class="panel-box" id="register-panel">
-            <h2>Register New User</h2>
-            <form id="register-form">
-                <div class="form-group"><label>Username:</label><input type="text" id="reg_username" required></div>
-                <div class="form-group"><label>Password:</label><input type="password" id="reg_password" required></div>
-                <div class="form-group"><label>Plate Number:</label><input type="text" id="reg_plate" required></div>
-                <button type="submit" class="btn-submit">Register</button>
-                <button type="button" class="btn-submit btn-secondary" onclick="toggleAuthPanel('login')">Back to Login</button>
-            </form>
-            <div id="register-message" class="form-message"></div>
-        </div>
-
-        <div class="panel-box" id="admin-panel" style="max-width: 800px;">
-            <h2>Admin Analytics Dashboard</h2>
-            <div class="form-row" style="margin-bottom: 20px;">
-                <div class="stat-box" style="width: 22%; text-align: center;">Total Users<br><span id="admin-users" style="color: #3498db; font-size: 1.5rem;">0</span></div>
-                <div class="stat-box" style="width: 22%; text-align: center;">All Bookings<br><span id="admin-bookings" style="color: #9b59b6; font-size: 1.5rem;">0</span></div>
-                <div class="stat-box" style="width: 22%; text-align: center;">Active<br><span id="admin-active" style="color: #2ecc71; font-size: 1.5rem;">0</span></div>
-                <div class="stat-box" style="width: 22%; text-align: center;">Top Spot<br><span id="admin-top" style="color: #e67e22; font-size: 1.2rem;">-</span></div>
-            </div>
-            <h3 style="font-size: 1.1rem; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">Recent Transactions</h3>
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                <thead>
-                    <tr style="background: #34495e; color: white;">
-                        <th style="padding: 10px;">User</th><th style="padding: 10px;">Spot</th><th style="padding: 10px;">Start Time</th><th style="padding: 10px;">Status</th>
-                    </tr>
-                </thead>
-                <tbody id="admin-table-body">
-                </tbody>
-            </table>
-            <h3 style="font-size: 1.1rem; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">Admin Reserve Any Spot</h3>
-            <form id="admin-reserve-form">
-                <div class="form-row">
-                    <div class="form-group"><label>Spot:</label><select id="admin_spot_id" required></select></div>
-                    <div class="form-group"><label>User ID:</label><input type="number" id="admin_user_id" placeholder="empty = admin"></div>
+        <div class="app-grid">
+            <div class="panel-stack">
+                <div class="panel-box" id="login-panel">
+                    <h2>User Login</h2>
+                    <form id="login-form">
+                        <div class="form-group full"><label>Username:</label><input type="text" id="login_username" required></div>
+                        <div class="form-group full"><label>Password:</label><input type="password" id="login_password" required></div>
+                        <button type="submit" class="btn-submit">Login</button>
+                        <button type="button" class="btn-submit btn-secondary" onclick="toggleAuthPanel('register')">Create New Account</button>
+                    </form>
+                    <div id="login-message" class="form-message"></div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group"><label>Start Time:</label><input type="datetime-local" id="admin_start_time" required></div>
-                    <div class="form-group"><label>End Time:</label><input type="datetime-local" id="admin_end_time" required></div>
-                </div>
-                <button type="submit" class="btn-submit">Admin Reserve</button>
-            </form>
-            <div id="admin-message" class="form-message"></div>
-            <h3 style="font-size: 1.1rem; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">Manual Sensor Control</h3>
-            <form id="admin-sensor-form">
-                <div class="form-row">
-                    <div class="form-group"><label>Spot:</label><select id="sensor_spot_id" required></select></div>
-                    <div class="form-group"><label>Status:</label><select id="sensor_status" required><option value="1">Occupied</option><option value="0">Empty</option></select></div>
-                </div>
-                <button type="submit" class="btn-submit">Update Sensor</button>
-            </form>
-            <h3 style="font-size: 1.1rem; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">Active Reservations</h3>
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                <thead>
-                    <tr style="background: #34495e; color: white;">
-                        <th style="padding: 10px;">User</th><th style="padding: 10px;">Spot</th><th style="padding: 10px;">Start</th><th style="padding: 10px;">End</th><th style="padding: 10px;">Action</th>
-                    </tr>
-                </thead>
-                <tbody id="admin-active-body">
-                </tbody>
-            </table>
-            <button class="btn-submit btn-secondary" style="margin-top: 20px;" onclick="logoutUser()">Logout Admin</button>
-        </div>
 
-        <h3 id="user-welcome" style="color: #2c3e50;"></h3>
+                <div class="panel-box" id="register-panel">
+                    <h2>Register New User</h2>
+                    <form id="register-form">
+                        <div class="form-group full"><label>Username:</label><input type="text" id="reg_username" required></div>
+                        <div class="form-group full"><label>Password:</label><input type="password" id="reg_password" required></div>
+                        <div class="form-group full"><label>Plate Number:</label><input type="text" id="reg_plate" required></div>
+                        <button type="submit" class="btn-submit">Register</button>
+                        <button type="button" class="btn-submit btn-secondary" onclick="toggleAuthPanel('login')">Back to Login</button>
+                    </form>
+                    <div id="register-message" class="form-message"></div>
+                </div>
 
-        <div class="panel-box" id="reservation-panel">
-            <h2>Smart Spot Search & Booking</h2>
-            <div class="wallet-box">
-                Wallet Balance: <strong id="wallet-balance">$0.00</strong>
-                <form id="wallet-form" style="margin-top: 10px;">
-                    <div class="form-row">
-                        <div class="form-group" style="width: 100%;"><label>Charge Amount:</label><input type="number" id="wallet_amount" min="0.01" step="0.01" required></div>
+                <h3 id="user-welcome"></h3>
+
+                <div class="panel-box" id="reservation-panel">
+                    <h2>Smart Spot Search & Booking</h2>
+                    <div class="wallet-box">
+                        Wallet Balance: <strong id="wallet-balance">$0.00</strong>
+                        <form id="wallet-form" style="margin-top: 10px;">
+                            <div class="form-group full"><label>Charge Amount:</label><input type="number" id="wallet_amount" min="0.01" step="0.01" required></div>
+                            <button type="submit" class="btn-submit">Charge Wallet</button>
+                        </form>
+                        <div id="wallet-message" class="form-message"></div>
                     </div>
-                    <button type="submit" class="btn-submit">Charge Wallet</button>
-                </form>
-                <div id="wallet-message" class="form-message"></div>
-            </div>
-            <form id="search-form">
-                <div class="form-row">
-                    <div class="form-group"><label>Start Time:</label><input type="datetime-local" id="start_time" required></div>
-                    <div class="form-group"><label>End Time:</label><input type="datetime-local" id="end_time" required></div>
+                    <form id="search-form">
+                        <div class="form-row">
+                            <div class="form-group"><label>Start Time:</label><input type="datetime-local" id="start_time" required></div>
+                            <div class="form-group"><label>End Time:</label><input type="datetime-local" id="end_time" required></div>
+                        </div>
+                        <button type="submit" class="btn-submit">Find Available Spots</button>
+                    </form>
+                    <div id="spots-result" style="display:none; margin-top: 16px; text-align:center;">
+                        <label>Select a Free Spot to Book:</label>
+                        <div id="available-spots-container"></div>
+                    </div>
+                    <div id="pricing-box" class="pricing-box">
+                        <div>Reservation Price: <strong id="reservation-price">$0.00</strong></div>
+                        <div id="pricing-note" class="pricing-note"></div>
+                        <div id="selected-spot-summary" class="pricing-note"></div>
+                    </div>
+                    <button type="button" id="pay-button" class="btn-submit btn-pay" onclick="payAndBook()">Pay & Confirm Reservation</button>
+                    <div id="reserve-message" class="form-message"></div>
+                    <h3>My Active Reservations</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Spot</th><th>Start</th><th>End</th><th>Price</th><th>Action</th></tr></thead>
+                            <tbody id="user-reservations-body"></tbody>
+                        </table>
+                    </div>
+                    <button type="button" class="btn-submit btn-secondary" onclick="logoutUser()">Logout</button>
                 </div>
-                <button type="submit" class="btn-submit">Find Available Spots</button>
-            </form>
-            <div id="spots-result" style="display: none; margin-top: 20px; text-align: center;">
-                <label style="font-weight: 600; color: #34495e;">Select a Free Spot to Book:</label>
-                <div id="available-spots-container" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 15px;"></div>
+
+                <div class="panel-box" id="admin-panel">
+                    <h2>Admin Analytics Dashboard</h2>
+                    <div class="form-row" style="margin-bottom: 12px;">
+                        <div class="stat-box">Users<br><span id="admin-users">0</span></div>
+                        <div class="stat-box">Bookings<br><span id="admin-bookings">0</span></div>
+                        <div class="stat-box">Active<br><span id="admin-active">0</span></div>
+                        <div class="stat-box">Top<br><span id="admin-top">-</span></div>
+                    </div>
+                    <h3>Recent Transactions</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>User</th><th>Spot</th><th>Start</th><th>Status</th></tr></thead>
+                            <tbody id="admin-table-body"></tbody>
+                        </table>
+                    </div>
+                    <h3>Admin Reserve Any Spot</h3>
+                    <form id="admin-reserve-form">
+                        <div class="form-row">
+                            <div class="form-group"><label>Spot:</label><select id="admin_spot_id" required></select></div>
+                            <div class="form-group"><label>User ID:</label><input type="number" id="admin_user_id" placeholder="empty = admin"></div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group"><label>Start Time:</label><input type="datetime-local" id="admin_start_time" required></div>
+                            <div class="form-group"><label>End Time:</label><input type="datetime-local" id="admin_end_time" required></div>
+                        </div>
+                        <button type="submit" class="btn-submit">Admin Reserve</button>
+                    </form>
+                    <div id="admin-message" class="form-message"></div>
+                    <h3>Manual Sensor Control</h3>
+                    <form id="admin-sensor-form">
+                        <div class="form-row">
+                            <div class="form-group"><label>Spot:</label><select id="sensor_spot_id" required></select></div>
+                            <div class="form-group"><label>Status:</label><select id="sensor_status" required><option value="1">Occupied</option><option value="0">Empty</option></select></div>
+                        </div>
+                        <button type="submit" class="btn-submit">Update Sensor</button>
+                    </form>
+                    <h3>Active Reservations</h3>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>User</th><th>Spot</th><th>Start</th><th>End</th><th>Action</th></tr></thead>
+                            <tbody id="admin-active-body"></tbody>
+                        </table>
+                    </div>
+                    <button class="btn-submit btn-secondary" onclick="logoutUser()">Logout Admin</button>
+                </div>
             </div>
-            <div id="pricing-box" class="pricing-box">
-                <div>Reservation Price: <strong id="reservation-price">$0.00</strong></div>
-                <div id="pricing-note" class="pricing-note"></div>
-                <div id="selected-spot-summary" class="pricing-note"></div>
-            </div>
-            <button type="button" id="pay-button" class="btn-submit btn-pay" onclick="payAndBook()">Pay & Confirm Reservation</button>
-            <div id="reserve-message" class="form-message"></div>
-            <h3 style="font-size: 1.1rem; border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; color: #2c3e50;">My Active Reservations</h3>
-            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.95rem;">
-                <thead>
-                    <tr style="background: #34495e; color: white;">
-                        <th style="padding: 10px;">Spot</th><th style="padding: 10px;">Start</th><th style="padding: 10px;">End</th><th style="padding: 10px;">Price</th><th style="padding: 10px;">Action</th>
-                    </tr>
-                </thead>
-                <tbody id="user-reservations-body">
-                </tbody>
-            </table>
-            <button type="button" class="btn-submit btn-secondary" style="margin-top: 15px;" onclick="logoutUser()">Logout</button>
-        </div>
 
-        <div class="stats-container">
-            <div class="stat-box">Total Spots: <span>10</span></div>
-            <div class="stat-box">Available: <span id="available-spots">-</span></div>
-        </div>
-
-        <div class="parking-arena" id="parking-arena">
-            <div class="gate entrance-gate">ENTRANCE</div>
-            <div class="gate exit-gate">EXIT</div>
-            <div class="driveway main-lane"></div>
-            <div class="driveway top-lane"></div>
-            <div class="driveway bottom-lane"></div>
-
-            <div class="parking-row top-row">
-                <div class="spot-container" id="spot-1"><div class="spot-label">#1</div></div>
-                <div class="spot-container" id="spot-2"><div class="spot-label">#2</div></div>
-                <div class="spot-container" id="spot-3"><div class="spot-label">#3</div></div>
-                <div class="spot-container" id="spot-4"><div class="spot-label">#4</div></div>
-                <div class="spot-container" id="spot-5"><div class="spot-label">#5</div></div>
-            </div>
-
-            <div class="parking-row bottom-row">
-                <div class="spot-container" id="spot-6"><div class="spot-label">#6</div></div>
-                <div class="spot-container" id="spot-7"><div class="spot-label">#7</div></div>
-                <div class="spot-container" id="spot-8"><div class="spot-label">#8</div></div>
-                <div class="spot-container" id="spot-9"><div class="spot-label">#9</div></div>
-                <div class="spot-container" id="spot-10"><div class="spot-label">#10</div></div>
+            <div class="scene-panel">
+                <div class="stats-container">
+                    <div class="stat-box">Total Spots: <span>10</span></div>
+                    <div class="stat-box">Available: <span id="available-spots">-</span></div>
+                </div>
+                <div id="scene-shell">
+                    <div class="scene-label entrance">ENTRANCE</div>
+                    <div class="scene-label exit">EXIT</div>
+                    <canvas id="three-canvas"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as ThreeModule from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        const THREE = { ...ThreeModule, GLTFLoader };
+
         let loggedInUserId = null;
         const apiUrl = 'http://127.0.0.1:5000/api/spots';
         let previousState = {};
@@ -202,6 +296,366 @@
         let pendingReservation = null;
         let isAdmin = false;
         let walletBalance = 0;
+
+        const spotLayout = {};
+        const carObjects = new Map();
+        const carLabels = new Map();
+        const carColors = ['#e74c3c', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#2ecc71', '#ff8fa3', '#7bdff2'];
+        const carLoader = new THREE.GLTFLoader();
+        const CAR_FIXED_Y = 0.35;
+        const sceneShell = document.getElementById('scene-shell');
+        const canvas = document.getElementById('three-canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color('#ebdcd0');
+
+        const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+        camera.position.set(7.8, 8.2, 8.4);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(-4, 8, 6);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.set(2048, 2048);
+        directionalLight.shadow.bias = -0.0005;
+        directionalLight.shadow.radius = 4;
+        directionalLight.shadow.camera.left = -10;
+        directionalLight.shadow.camera.right = 10;
+        directionalLight.shadow.camera.top = 10;
+        directionalLight.shadow.camera.bottom = -10;
+        directionalLight.shadow.camera.near = 1;
+        directionalLight.shadow.camera.far = 28;
+        scene.add(directionalLight);
+
+        const makeMaterial = (color) => new THREE.MeshStandardMaterial({
+            color,
+            roughness: 0.8,
+            metalness: 0.1,
+            flatShading: false
+        });
+
+        function createRoundedRectShape(width, depth, radius) {
+            const shape = new THREE.Shape();
+            const x = -width / 2;
+            const y = -depth / 2;
+            shape.moveTo(x + radius, y);
+            shape.lineTo(x + width - radius, y);
+            shape.quadraticCurveTo(x + width, y, x + width, y + radius);
+            shape.lineTo(x + width, y + depth - radius);
+            shape.quadraticCurveTo(x + width, y + depth, x + width - radius, y + depth);
+            shape.lineTo(x + radius, y + depth);
+            shape.quadraticCurveTo(x, y + depth, x, y + depth - radius);
+            shape.lineTo(x, y + radius);
+            shape.quadraticCurveTo(x, y, x + radius, y);
+            return shape;
+        }
+
+        function createRoundedExtrudedMesh(width, depth, radius, height, color, bevel = 0.035, curveSegments = 18) {
+            const geometry = new THREE.ExtrudeGeometry(createRoundedRectShape(width, depth, radius), {
+                depth: height,
+                bevelEnabled: true,
+                bevelThickness: bevel,
+                bevelSize: bevel,
+                bevelSegments: 10,
+                curveSegments,
+                steps: 2
+            });
+            geometry.center();
+            geometry.computeVertexNormals();
+            const mesh = new THREE.Mesh(geometry, makeMaterial(color));
+            return mesh;
+        }
+
+        function createRoundedPlane(width, depth, radius, height, color) {
+            const mesh = createRoundedExtrudedMesh(width, depth, radius, height, color, 0.045, 24);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.receiveShadow = true;
+            mesh.castShadow = true;
+            mesh.position.y = height / 2;
+            return mesh;
+        }
+
+        function createSoftBox(width, height, depth, radius, color) {
+            const mesh = createRoundedExtrudedMesh(width, depth, radius, height, color, Math.min(radius * 0.38, 0.08), 20);
+            mesh.rotation.x = Math.PI / 2;
+            mesh.geometry.computeVertexNormals();
+            return mesh;
+        }
+
+        function addLineBox(x, z, width, depth, color = 0xffffff) {
+            const material = makeMaterial(color);
+            const thickness = 0.035;
+            const height = 0.035;
+            const pieces = [
+                [x, z - depth / 2, width, thickness],
+                [x, z + depth / 2, width, thickness],
+                [x - width / 2, z, thickness, depth],
+                [x + width / 2, z, thickness, depth],
+            ];
+            pieces.forEach(([px, pz, sx, sz]) => {
+                const line = createRoundedExtrudedMesh(sx, sz, Math.min(0.035, sx / 2, sz / 2), height, color, 0.01, 8);
+                line.rotation.x = -Math.PI / 2;
+                line.material = material;
+                line.position.set(px, 0.14, pz);
+                line.receiveShadow = true;
+                scene.add(line);
+            });
+        }
+
+        function addDashedLaneLine(z) {
+            for (let x = -5.4; x <= 5.4; x += 1.1) {
+                const dash = createRoundedExtrudedMesh(0.58, 0.035, 0.017, 0.035, 0xf8f6f0, 0.008, 8);
+                dash.rotation.x = -Math.PI / 2;
+                dash.position.set(x, 0.15, z);
+                dash.receiveShadow = true;
+                scene.add(dash);
+            }
+        }
+
+        function initParkingScene() {
+            const base = createRoundedPlane(12.4, 7.4, 0.45, 0.16, 0x6f7780);
+            scene.add(base);
+
+            const lane = createRoundedPlane(11.6, 1.55, 0.22, 0.05, 0x5c646d);
+            lane.position.set(0, 0.17, 0);
+            lane.receiveShadow = true;
+            scene.add(lane);
+
+            addDashedLaneLine(-0.48);
+            addDashedLaneLine(0.48);
+
+            const xs = [-4.35, -2.18, 0, 2.18, 4.35];
+            xs.forEach((x, index) => {
+                const topId = index + 1;
+                const bottomId = index + 6;
+                spotLayout[topId] = { x, z: -2.45, row: 'top', rotation: Math.PI };
+                spotLayout[bottomId] = { x, z: 2.45, row: 'bottom', rotation: 0 };
+
+                const topSpot = createRoundedPlane(1.55, 1.6, 0.14, 0.035, 0x7b858f);
+                topSpot.position.set(x, 0.19, -2.45);
+                topSpot.receiveShadow = true;
+                scene.add(topSpot);
+                addLineBox(x, -2.45, 1.55, 1.6, 0xf8f6f0);
+
+                const bottomSpot = createRoundedPlane(1.55, 1.6, 0.14, 0.035, 0x7b858f);
+                bottomSpot.position.set(x, 0.19, 2.45);
+                bottomSpot.receiveShadow = true;
+                scene.add(bottomSpot);
+                addLineBox(x, 2.45, 1.55, 1.6, 0xf8f6f0);
+            });
+
+            const entrance = createSoftBox(0.18, 0.35, 1.55, 0.08, 0x2ecc71);
+            entrance.position.set(-6.08, 0.36, 0);
+            entrance.castShadow = true;
+            scene.add(entrance);
+
+            const exit = createSoftBox(0.18, 0.35, 1.55, 0.08, 0xe74c3c);
+            exit.position.set(6.08, 0.36, 0);
+            exit.castShadow = true;
+            scene.add(exit);
+        }
+
+        function loadCarMesh(spotId, reservedBy) {
+            const randomColor = reservedBy ? '#34495e' : carColors[Math.floor(Math.random() * carColors.length)];
+            return new Promise((resolve, reject) => {
+                carLoader.load('models/car.glb', (gltf) => {
+                    const carModel = gltf.scene;
+                    carModel.name = `car-obj-${spotId}`;
+                    carModel.scale.set(0.55, 0.55, 0.55);
+
+                    let fallbackBodyMesh = null;
+                    let largestBodyArea = 0;
+                    carModel.traverse((node) => {
+                        if (!node.isMesh) return;
+
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+
+                        const name = `${node.name || ''} ${node.material?.name || ''}`.toLowerCase();
+                        const isWheel = name.includes('wheel') || name.includes('tire') || name.includes('tyre') || name.includes('rim');
+                        const isWindow = name.includes('window') || name.includes('glass') || name.includes('windshield') || name.includes('windscreen');
+                        const isBodyPaint = name.includes('body') || name.includes('paint') || name.includes('chassis') || name.includes('shell');
+
+                        if (isBodyPaint && node.material?.color) {
+                            node.material.color.set(randomColor);
+                            node.material.roughness = 0.7;
+                            node.material.metalness = 0.1;
+                            node.material.needsUpdate = true;
+                        }
+
+                        if (!isWheel && !isWindow) {
+                            const meshBox = new THREE.Box3().setFromObject(node);
+                            const meshSize = meshBox.getSize(new THREE.Vector3());
+                            const area = meshSize.x * meshSize.y * meshSize.z;
+                            if (area > largestBodyArea && node.material?.color) {
+                                largestBodyArea = area;
+                                fallbackBodyMesh = node;
+                            }
+                        }
+                    });
+
+                    if (fallbackBodyMesh?.material?.color) {
+                        fallbackBodyMesh.material.color.set(randomColor);
+                        fallbackBodyMesh.material.roughness = 0.7;
+                        fallbackBodyMesh.material.metalness = 0.1;
+                        fallbackBodyMesh.material.needsUpdate = true;
+                    }
+
+                    carModel.position.y = CAR_FIXED_Y;
+                    resolve(carModel);
+                }, undefined, reject);
+            });
+        }
+
+        function setCarLabel(spotId, car, reservedBy) {
+            removeCarLabel(spotId);
+            if (!reservedBy) return;
+            const label = document.createElement('div');
+            label.className = 'car-name-label';
+            label.innerText = reservedBy;
+            sceneShell.appendChild(label);
+            carLabels.set(spotId, { label, car });
+        }
+
+        function removeCarLabel(spotId) {
+            const item = carLabels.get(spotId);
+            if (!item) return;
+            item.label.remove();
+            carLabels.delete(spotId);
+        }
+
+        function updateCarLabels() {
+            const width = sceneShell.clientWidth;
+            const height = sceneShell.clientHeight;
+            carLabels.forEach(({ label, car }) => {
+                const box = new THREE.Box3().setFromObject(car);
+                const point = box.getCenter(new THREE.Vector3());
+                point.y = box.max.y + 0.28;
+                point.project(camera);
+                const x = (point.x * 0.5 + 0.5) * width;
+                const y = (-point.y * 0.5 + 0.5) * height;
+                const visible = point.z > -1 && point.z < 1;
+                label.style.display = visible ? 'block' : 'none';
+                label.style.left = `${x}px`;
+                label.style.top = `${y}px`;
+            });
+        }
+
+        async function setCarStatic(spotId, reservedBy) {
+            if (carObjects.has(spotId)) return;
+            const car = await loadCarMesh(spotId, reservedBy);
+            const layout = spotLayout[spotId];
+            car.position.set(layout.x, CAR_FIXED_Y, layout.z);
+            car.rotation.y = layout.rotation;
+            scene.add(car);
+            carObjects.set(spotId, car);
+            setCarLabel(spotId, car, reservedBy);
+        }
+
+        function easeInOut(t) {
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+
+        function lerpAngle(a, b, t) {
+            let diff = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
+            return a + diff * t;
+        }
+
+        function animatePath(car, keyframes, duration = 2500) {
+            return new Promise((resolve) => {
+                const start = performance.now();
+                const step = (now) => {
+                    const elapsed = Math.min(now - start, duration);
+                    const raw = elapsed / duration;
+                    const segmentCount = keyframes.length - 1;
+                    const scaled = Math.min(raw * segmentCount, segmentCount - 0.0001);
+                    const index = Math.floor(scaled);
+                    const localT = easeInOut(scaled - index);
+                    const a = keyframes[index];
+                    const b = keyframes[index + 1];
+                    car.position.set(
+                        THREE.MathUtils.lerp(a.x, b.x, localT),
+                        CAR_FIXED_Y,
+                        THREE.MathUtils.lerp(a.z, b.z, localT)
+                    );
+                    car.rotation.y = lerpAngle(a.r, b.r, localT);
+                    if (elapsed < duration) {
+                        requestAnimationFrame(step);
+                    } else {
+                        const end = keyframes[keyframes.length - 1];
+                        car.position.set(end.x, CAR_FIXED_Y, end.z);
+                        car.rotation.y = end.r;
+                        resolve();
+                    }
+                };
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function processQueue() {
+            if (isAnimationRunning || animationQueue.length === 0) return;
+            isAnimationRunning = true;
+            const task = animationQueue.shift();
+            const layout = spotLayout[task.spotId];
+
+            if (task.type === 'ENTRY') {
+                const oldCar = carObjects.get(task.spotId);
+                if (oldCar) {
+                    scene.remove(oldCar);
+                    carObjects.delete(task.spotId);
+                    removeCarLabel(task.spotId);
+                }
+                const car = await loadCarMesh(task.spotId, task.reservedBy);
+                scene.add(car);
+                carObjects.set(task.spotId, car);
+                setCarLabel(task.spotId, car, task.reservedBy);
+                await animatePath(car, [
+                    { x: -6.8, z: 0, r: Math.PI / 2 },
+                    { x: layout.x, z: 0, r: Math.PI / 2 },
+                    { x: layout.x, z: 0, r: layout.rotation },
+                    { x: layout.x, z: layout.z, r: layout.rotation }
+                ]);
+            } else if (task.type === 'EXIT') {
+                const car = carObjects.get(task.spotId);
+                if (car) {
+                    await animatePath(car, [
+                        { x: layout.x, z: layout.z, r: layout.rotation },
+                        { x: layout.x, z: 0, r: layout.rotation },
+                        { x: layout.x, z: 0, r: Math.PI / 2 },
+                        { x: 6.9, z: 0, r: Math.PI / 2 }
+                    ]);
+                    scene.remove(car);
+                    carObjects.delete(task.spotId);
+                    removeCarLabel(task.spotId);
+                }
+            }
+
+            isAnimationRunning = false;
+            processQueue();
+        }
+
+        function resizeRenderer() {
+            const width = sceneShell.clientWidth;
+            const height = sceneShell.clientHeight;
+            renderer.setSize(width, height, false);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        }
+
+        function renderLoop() {
+            resizeRenderer();
+            updateCarLabels();
+            renderer.render(scene, camera);
+            requestAnimationFrame(renderLoop);
+        }
 
         function toggleAuthPanel(panel) {
             document.getElementById('login-panel').style.display = panel === 'login' ? 'block' : 'none';
@@ -219,6 +673,7 @@
             document.getElementById('reservation-panel').style.display = 'none';
             document.getElementById('user-welcome').style.display = 'none';
             document.getElementById('login-panel').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             document.getElementById('spots-result').style.display = 'none';
             document.getElementById('available-spots-container').innerHTML = '';
             document.getElementById('pricing-box').style.display = 'none';
@@ -229,6 +684,14 @@
             document.getElementById('user-reservations-body').innerHTML = '';
             document.getElementById('login-message').innerText = '';
             document.getElementById('login_password').value = '';
+        }
+
+        window.toggleAuthPanel = toggleAuthPanel;
+        window.logoutUser = logoutUser;
+
+        function setMessage(el, ok, text) {
+            el.className = `form-message ${ok ? 'msg-success' : 'msg-error'}`;
+            el.innerText = text || '';
         }
 
         function updateWalletDisplay(balance) {
@@ -247,12 +710,10 @@
             const tbody = document.getElementById('user-reservations-body');
             tbody.innerHTML = '';
             reservations.forEach(r => {
-                tbody.innerHTML += `<tr style="border-bottom: 1px solid #bdc3c7;">
-                    <td style="padding: 10px;">#${r.spot_id}</td>
-                    <td style="padding: 10px;">${r.start_time}</td>
-                    <td style="padding: 10px;">${r.end_time}</td>
-                    <td style="padding: 10px;">$${Number(r.price || 0).toFixed(2)}</td>
-                    <td style="padding: 10px;"><button type="button" class="btn-submit btn-danger" onclick="cancelMyReservation(${r.id})">Cancel</button></td>
+                tbody.innerHTML += `<tr>
+                    <td>#${r.spot_id}</td><td>${r.start_time}</td><td>${r.end_time}</td>
+                    <td>$${Number(r.price || 0).toFixed(2)}</td>
+                    <td><button type="button" class="btn-danger" onclick="cancelMyReservation(${r.id})">Cancel</button></td>
                 </tr>`;
             });
         }
@@ -266,19 +727,19 @@
                     body: JSON.stringify({ user_id: loggedInUserId })
                 });
                 const result = await response.json();
-                msgDiv.className = response.ok ? 'form-message msg-success' : 'form-message msg-error';
-                msgDiv.innerText = result.message || result.error;
+                setMessage(msgDiv, response.ok, result.message || result.error);
                 if (response.ok) updateWalletDisplay(result.wallet_balance);
                 await loadUserDashboard();
                 updateParkingDashboard();
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         }
+        window.cancelMyReservation = cancelMyReservation;
 
-        // تابع اجرای داشبورد مدیریت
         async function loadAdminDashboard() {
             document.getElementById('login-panel').style.display = 'none';
             document.getElementById('admin-panel').style.display = 'block';
-
             try {
                 const adminHeaders = { 'X-User-Id': loggedInUserId };
                 const res = await fetch('http://127.0.0.1:5000/api/admin/analytics', { headers: adminHeaders });
@@ -298,31 +759,23 @@
                 const tbody = document.getElementById('admin-table-body');
                 tbody.innerHTML = '';
                 txs.forEach(tx => {
-                    const statusColor = tx.status === 'Active' ? '#2ecc71' : '#7f8c8d';
-                    tbody.innerHTML += `<tr style="border-bottom: 1px solid #bdc3c7;">
-                        <td style="padding: 10px; font-weight: bold;">${tx.username}</td>
-                        <td style="padding: 10px;">#${tx.spot_id}</td>
-                        <td style="padding: 10px;">${tx.start_time}</td>
-                        <td style="padding: 10px; color: ${statusColor}; font-weight: bold;">${tx.status}</td>
-                    </tr>`;
+                    tbody.innerHTML += `<tr><td>${tx.username}</td><td>#${tx.spot_id}</td><td>${tx.start_time}</td><td>${tx.status}</td></tr>`;
                 });
                 await loadAdminReservations();
-            } catch(e) { console.error('Admin API Error'); }
+            } catch(e) {
+                console.error('Admin API Error', e);
+            }
         }
 
         async function loadAdminReservations() {
-            const adminHeaders = { 'X-User-Id': loggedInUserId };
-            const res = await fetch('http://127.0.0.1:5000/api/admin/reservations', { headers: adminHeaders });
+            const res = await fetch('http://127.0.0.1:5000/api/admin/reservations', { headers: { 'X-User-Id': loggedInUserId } });
             const reservations = await res.json();
             const tbody = document.getElementById('admin-active-body');
             tbody.innerHTML = '';
             reservations.forEach(r => {
-                tbody.innerHTML += `<tr style="border-bottom: 1px solid #bdc3c7;">
-                    <td style="padding: 10px; font-weight: bold;">${r.username}</td>
-                    <td style="padding: 10px;">#${r.spot_id}</td>
-                    <td style="padding: 10px;">${r.start_time}</td>
-                    <td style="padding: 10px;">${r.end_time}</td>
-                    <td style="padding: 10px;"><button type="button" class="btn-submit btn-danger" onclick="adminCancelReservation(${r.id})">Cancel</button></td>
+                tbody.innerHTML += `<tr>
+                    <td>${r.username}</td><td>#${r.spot_id}</td><td>${r.start_time}</td><td>${r.end_time}</td>
+                    <td><button type="button" class="btn-danger" onclick="adminCancelReservation(${r.id})">Cancel</button></td>
                 </tr>`;
             });
         }
@@ -335,12 +788,14 @@
                     headers: { 'X-User-Id': loggedInUserId }
                 });
                 const result = await response.json();
-                msgDiv.className = response.ok ? 'form-message msg-success' : 'form-message msg-error';
-                msgDiv.innerText = result.message || result.error;
+                setMessage(msgDiv, response.ok, result.message || result.error);
                 await loadAdminDashboard();
                 updateParkingDashboard();
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         }
+        window.adminCancelReservation = adminCancelReservation;
 
         document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -355,15 +810,12 @@
                         plate_number: document.getElementById('reg_plate').value
                     })
                 });
-                if (response.ok) {
-                    msgDiv.className = 'form-message msg-success';
-                    msgDiv.innerText = 'Registration successful! Please login.';
-                    setTimeout(() => toggleAuthPanel('login'), 1500);
-                } else {
-                    msgDiv.className = 'form-message msg-error';
-                    msgDiv.innerText = (await response.json()).error;
-                }
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+                const result = await response.json().catch(() => ({}));
+                setMessage(msgDiv, response.ok, response.ok ? 'Registration successful! Please login.' : result.error);
+                if (response.ok) setTimeout(() => toggleAuthPanel('login'), 1200);
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         });
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -394,10 +846,11 @@
                         await loadUserDashboard();
                     }
                 } else {
-                    msgDiv.className = 'form-message msg-error';
-                    msgDiv.innerText = result.error;
+                    setMessage(msgDiv, false, result.error);
                 }
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         });
 
         document.getElementById('wallet-form').addEventListener('submit', async (e) => {
@@ -407,19 +860,17 @@
                 const response = await fetch('http://127.0.0.1:5000/api/wallet/topup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: loggedInUserId,
-                        amount: document.getElementById('wallet_amount').value
-                    })
+                    body: JSON.stringify({ user_id: loggedInUserId, amount: document.getElementById('wallet_amount').value })
                 });
                 const result = await response.json();
-                msgDiv.className = response.ok ? 'form-message msg-success' : 'form-message msg-error';
-                msgDiv.innerText = result.message || result.error;
+                setMessage(msgDiv, response.ok, result.message || result.error);
                 if (response.ok) {
                     updateWalletDisplay(result.wallet_balance);
                     document.getElementById('wallet_amount').value = '';
                 }
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         });
 
         document.getElementById('admin-reserve-form').addEventListener('submit', async (e) => {
@@ -428,7 +879,6 @@
             const endTime = document.getElementById('admin_end_time').value.replace('T', ' ') + ':00';
             const userId = document.getElementById('admin_user_id').value;
             const msgDiv = document.getElementById('admin-message');
-
             try {
                 const response = await fetch('http://127.0.0.1:5000/api/admin/reserve_any', {
                     method: 'POST',
@@ -441,11 +891,12 @@
                     })
                 });
                 const result = await response.json();
-                msgDiv.className = response.ok ? 'form-message msg-success' : 'form-message msg-error';
-                msgDiv.innerText = result.message || result.error;
+                setMessage(msgDiv, response.ok, result.message || result.error);
                 await loadAdminDashboard();
                 updateParkingDashboard();
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         });
 
         document.getElementById('admin-sensor-form').addEventListener('submit', async (e) => {
@@ -461,10 +912,11 @@
                     })
                 });
                 const result = await response.json();
-                msgDiv.className = response.ok ? 'form-message msg-success' : 'form-message msg-error';
-                msgDiv.innerText = result.message || result.error;
+                setMessage(msgDiv, response.ok, result.message || result.error);
                 updateParkingDashboard();
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
+            }
         });
 
         document.getElementById('search-form').addEventListener('submit', async (e) => {
@@ -477,7 +929,6 @@
             document.getElementById('pay-button').style.display = 'none';
             document.getElementById('selected-spot-summary').innerText = '';
             pendingReservation = null;
-
             try {
                 const response = await fetch('http://127.0.0.1:5000/api/search_spots', {
                     method: 'POST',
@@ -486,28 +937,24 @@
                 });
                 const result = await response.json();
                 if (!response.ok) {
-                    msgDiv.className = 'form-message msg-error';
-                    msgDiv.innerText = result.error || 'Search failed.';
+                    setMessage(msgDiv, false, result.error || 'Search failed.');
                     document.getElementById('spots-result').style.display = 'none';
                     return;
                 }
                 const spots = result.spots || [];
                 const container = document.getElementById('available-spots-container');
-                container.innerHTML = ''; 
+                container.innerHTML = '';
                 document.getElementById('reservation-price').innerText = `$${Number(result.price || 0).toFixed(2)}`;
                 document.getElementById('pricing-note').innerText = result.pricing_note || 'Parking costs $1 per hour. If you leave late, a $1 penalty is charged for each 10 minutes of delay.';
                 document.getElementById('pricing-box').style.display = 'block';
-                
                 if (spots.length === 0) {
-                    msgDiv.className = 'form-message msg-error';
-                    msgDiv.innerText = 'No reservable parking spots are available for the selected time range.';
+                    setMessage(msgDiv, false, 'No reservable parking spots are available for the selected time range.');
                     document.getElementById('spots-result').style.display = 'none';
                     document.getElementById('pricing-box').style.display = 'none';
                     document.getElementById('pay-button').style.display = 'none';
                     pendingReservation = null;
                     return;
                 }
-                
                 document.getElementById('spots-result').style.display = 'block';
                 spots.forEach(spot => {
                     const btn = document.createElement('button');
@@ -517,27 +964,27 @@
                     btn.onclick = () => selectSpotForPayment(spot.id, startTime, endTime, result.price);
                     container.appendChild(btn);
                 });
-            } catch (error) { msgDiv.innerText = 'Server error during search.'; }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error during search.');
+            }
         });
 
         function selectSpotForPayment(spotId, startTime, endTime, price) {
             pendingReservation = { spotId, startTime, endTime };
             document.getElementById('selected-spot-summary').innerText = `Selected Spot #${spotId}. Pay $${Number(price || 0).toFixed(2)} to confirm.`;
             document.getElementById('pay-button').style.display = 'block';
-            const msgDiv = document.getElementById('reserve-message');
-            msgDiv.className = 'form-message';
-            msgDiv.innerText = '';
+            document.getElementById('reserve-message').innerText = '';
         }
 
         async function payAndBook() {
             if (!pendingReservation) return;
             await bookSpot(pendingReservation.spotId, pendingReservation.startTime, pendingReservation.endTime);
         }
+        window.payAndBook = payAndBook;
 
         async function bookSpot(spotId, startTime, endTime) {
             if (!loggedInUserId) return;
             const msgDiv = document.getElementById('reserve-message');
-
             try {
                 const response = await fetch('http://127.0.0.1:5000/api/reserve', {
                     method: 'POST',
@@ -546,8 +993,7 @@
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    msgDiv.className = 'form-message msg-success';
-                    msgDiv.innerText = `${result.message}. Paid $${Number(result.price || 0).toFixed(2)}.`;
+                    setMessage(msgDiv, true, `${result.message}. Paid $${Number(result.price || 0).toFixed(2)}.`);
                     updateWalletDisplay(result.wallet_balance);
                     document.getElementById('spots-result').style.display = 'none';
                     document.getElementById('pay-button').style.display = 'none';
@@ -556,63 +1002,10 @@
                     await loadUserDashboard();
                     updateParkingDashboard();
                 } else {
-                    msgDiv.className = 'form-message msg-error';
-                    msgDiv.innerText = result.error;
+                    setMessage(msgDiv, false, result.error);
                 }
-            } catch (error) { msgDiv.innerText = 'Server error.'; }
-        }
-
-        function createCarElement(spotId, reservedBy) {
-            const car = document.createElement('div');
-            car.id = `car-obj-${spotId}`;
-            car.classList.add('car', `enter-spot-${spotId}`);
-            
-            if (reservedBy) {
-                car.innerHTML = `<div class="car-body" style="background-color: #34495e; border: 2px solid #f1c40f;">
-                    <div class="windshield"></div><div class="headlight-l"></div><div class="headlight-r"></div>
-                    <div class="vip-label">${reservedBy}</div></div>`;
-            } else {
-                const colors = ['#e74c3c', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#1abc9c'];
-                const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                car.innerHTML = `<div class="car-body" style="background-color: ${randomColor}">
-                    <div class="windshield"></div><div class="headlight-l"></div><div class="headlight-r"></div></div>`;
-            }
-            return car;
-        }
-
-        async function processQueue() {
-            if (isAnimationRunning || animationQueue.length === 0) return;
-            isAnimationRunning = true;
-            const task = animationQueue.shift();
-            const spotElement = document.getElementById(`spot-${task.spotId}`);
-            const arena = document.getElementById('parking-arena');
-
-            if (task.type === 'ENTRY') {
-                const oldCar = document.getElementById(`car-obj-${task.spotId}`);
-                if (oldCar) oldCar.remove();
-                
-                const car = createCarElement(task.spotId, task.reservedBy);
-                arena.appendChild(car);
-                
-                setTimeout(() => {
-                    if (spotElement) spotElement.classList.add('occupied-spot');
-                    isAnimationRunning = false;
-                    processQueue();
-                }, 2550);
-            } else if (task.type === 'EXIT') {
-                const car = document.getElementById(`car-obj-${task.spotId}`);
-                if (car) {
-                    if (spotElement) spotElement.classList.remove('occupied-spot');
-                    car.className = `car exit-spot-${task.spotId}`;
-                    setTimeout(() => {
-                        car.remove();
-                        isAnimationRunning = false;
-                        processQueue();
-                    }, 2550);
-                } else {
-                    isAnimationRunning = false;
-                    processQueue();
-                }
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error.');
             }
         }
 
@@ -622,20 +1015,13 @@
                 if (!response.ok) throw new Error('Network error');
                 const spots = await response.json();
                 let availableCount = 0;
-                
                 spots.forEach(spot => {
                     const isCurrentlyOccupied = spot.is_occupied;
                     const wasOccupied = previousState[spot.id];
                     if (!isCurrentlyOccupied) availableCount++;
 
                     if (wasOccupied === undefined && isCurrentlyOccupied) {
-                        const spotElement = document.getElementById(`spot-${spot.id}`);
-                        if (spotElement) spotElement.classList.add('occupied-spot');
-                        if (!document.getElementById(`car-obj-${spot.id}`)) {
-                            const car = createCarElement(spot.id, spot.reserved_by);
-                            car.className = `car parked-static-spot-${spot.id}`;
-                            document.getElementById('parking-arena').appendChild(car);
-                        }
+                        setCarStatic(spot.id, spot.reserved_by);
                     }
                     if (wasOccupied !== undefined && isCurrentlyOccupied && wasOccupied === false) {
                         animationQueue.push({ type: 'ENTRY', spotId: spot.id, reservedBy: spot.reserved_by });
@@ -646,9 +1032,13 @@
                 });
                 document.getElementById('available-spots').innerText = availableCount;
                 processQueue();
-            } catch (error) { console.error('Data fetch error:', error); }
+            } catch (error) {
+                console.error('Data fetch error:', error);
+            }
         }
 
+        initParkingScene();
+        renderLoop();
         updateParkingDashboard();
         for (let spotId = 1; spotId <= 10; spotId++) {
             const option = document.createElement('option');
