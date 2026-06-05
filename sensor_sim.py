@@ -13,8 +13,8 @@ SIM_USERS = [
     ("SIM-TARA", "SIM-1006"),
 ]
 
-RANDOM_SENSOR_INTERVAL_SECONDS = 30
-MIN_RANDOM_PARK_SECONDS = 90
+SIM_RESERVATION_TARGET_MIN = 1
+SIM_RESERVATION_TARGET_MAX = 3
 
 
 def ensure_sim_users(cursor):
@@ -44,7 +44,7 @@ def create_random_hourly_reservations(cursor, now):
         AND r.start_time < ?
     """, (hour_start_str, hour_end_str))
     existing_this_hour = cursor.fetchone()[0]
-    target_this_hour = random.randint(3, 6)
+    target_this_hour = random.randint(SIM_RESERVATION_TARGET_MIN, SIM_RESERVATION_TARGET_MAX)
     missing = max(0, target_this_hour - existing_this_hour)
     if missing == 0:
         return
@@ -84,8 +84,6 @@ def create_random_hourly_reservations(cursor, now):
 
 def simulate_environment():
     print("IoT Smart Environment & Conflict Resolution Manager Activated...")
-    physical_parked_since = {}
-    last_random_sensor_at = datetime.min
     
     while True:
         conn = sqlite3.connect('parking.db')
@@ -112,54 +110,20 @@ def simulate_environment():
             cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (spot_id,))
             
         # ۴. سنسور رندوم (عدم اجازه ورود به جایگاه‌هایی که در ۱ دقیقه آینده رزرو دارند)
-        if (now - last_random_sensor_at).total_seconds() >= RANDOM_SENSOR_INTERVAL_SECONDS:
-            last_random_sensor_at = now
-            buffer_time = (now + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S')
-
-            cursor.execute("""
-                SELECT id FROM Parking_Spots
-                WHERE is_occupied = 0
-                AND id NOT IN (
-                    SELECT spot_id FROM Reservations
-                    WHERE status = 'Active'
-                    AND start_time <= ?
-                    AND end_time > ?
-                )
-            """, (buffer_time, now_str))
-            entry_candidates = [row[0] for row in cursor.fetchall()]
-
-            cursor.execute("""
-                SELECT id FROM Parking_Spots
-                WHERE is_occupied = 1
-                AND id NOT IN (
-                    SELECT spot_id FROM Reservations
-                    WHERE status = 'Active'
-                    AND start_time <= ?
-                    AND end_time > ?
-                )
-            """, (buffer_time, now_str))
-            occupied_random_candidates = [row[0] for row in cursor.fetchall()]
-
-            for spot_id in occupied_random_candidates:
-                physical_parked_since.setdefault(spot_id, now)
-
-            exit_candidates = [
-                spot_id for spot_id in occupied_random_candidates
-                if (now - physical_parked_since.get(spot_id, now)).total_seconds() >= MIN_RANDOM_PARK_SECONDS
-            ]
-
-            if entry_candidates and (not exit_candidates or random.random() < 0.7):
-                random_spot = random.choice(entry_candidates)
-                cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (random_spot,))
-                physical_parked_since[random_spot] = now
-            elif exit_candidates:
-                random_spot = random.choice(exit_candidates)
-                cursor.execute("UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?", (random_spot,))
-                physical_parked_since.pop(random_spot, None)
+        cursor.execute("""
+            UPDATE Parking_Spots
+            SET is_occupied = 0
+            WHERE id NOT IN (
+                SELECT spot_id FROM Reservations
+                WHERE status = 'Active'
+                AND start_time <= ?
+                AND end_time > ?
+            )
+        """, (now_str, now_str))
         
         conn.commit()
         conn.close()
-        time.sleep(5)
+        time.sleep(random.randint(4, 8))
 
 if __name__ == "__main__":
     simulate_environment()
