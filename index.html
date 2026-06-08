@@ -346,7 +346,7 @@
         scene.background = new THREE.Color('#ebdcd0');
 
         const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-        camera.position.set(7.8, 8.2, 8.4);
+        camera.position.set(0, 8.5, 11.5);
         camera.lookAt(0, 0, 0);
 
         const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -1149,7 +1149,7 @@
             });
         }
 
-        async function adminCancelReservation(reservationId) {
+        async function adminCancelReservation(reservationId) {       
             const msgDiv = document.getElementById('admin-message');
             try {
                 const response = await fetch(`http://127.0.0.1:5000/api/admin/cancel_reservation/${reservationId}`, {
