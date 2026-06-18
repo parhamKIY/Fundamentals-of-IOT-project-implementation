@@ -49,7 +49,18 @@
         header h1 { margin: 0 0 4px; font-size: clamp(1.7rem, 3vw, 2.5rem); }
         header p { margin: 0; color: #65727f; font-weight: 700; }
         .app-grid { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 24px; align-items: start; }
-        .panel-stack { display: grid; gap: 12px; min-width: 0; position: relative; z-index: 2; }
+        .panel-stack {
+            display: grid;
+            gap: 12px;
+            min-width: 0;
+            max-height: calc(min(72vh, 690px) + 58px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-gutter: stable;
+            padding-right: 8px;
+            position: relative;
+            z-index: 2;
+        }
         .panel-box {
             background: rgba(255,255,255,0.82);
             border: 1px solid rgba(255, 255, 255, 0.58);
@@ -113,6 +124,22 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
         th { background: #34495e; color: white; text-align: left; padding: 8px; white-space: nowrap; }
         td { border-bottom: 1px solid #d9e1e8; padding: 8px; white-space: nowrap; }
+        #admin-panel { overflow-x: hidden; }
+        #admin-panel .table-wrap { overflow-x: hidden; }
+        #admin-panel table { table-layout: fixed; font-size: 0.78rem; }
+        #admin-panel th, #admin-panel td { padding: 7px 6px; overflow: hidden; text-overflow: ellipsis; }
+        #admin-panel input, #admin-panel select { min-width: 0; }
+        #reservation-panel { overflow-x: hidden; }
+        #reservation-panel .table-wrap { overflow-x: hidden; }
+        #reservation-panel table { table-layout: fixed; font-size: 0.76rem; }
+        #reservation-panel th, #reservation-panel td { padding: 7px 5px; overflow: hidden; text-overflow: ellipsis; }
+        #reservation-panel th:nth-child(1), #reservation-panel td:nth-child(1) { width: 12%; }
+        #reservation-panel th:nth-child(2), #reservation-panel td:nth-child(2) { width: 31%; }
+        #reservation-panel th:nth-child(3), #reservation-panel td:nth-child(3) { width: 31%; }
+        #reservation-panel th:nth-child(4), #reservation-panel td:nth-child(4) { width: 12%; }
+        #reservation-panel th:nth-child(5), #reservation-panel td:nth-child(5) { width: 14%; }
+        #reservation-panel .btn-danger { width: 100%; min-width: 0; padding: 7px 4px; }
+        #reservation-panel input, #reservation-panel select, #reservation-panel button { min-width: 0; }
         .stats-container { display: flex; gap: 10px; justify-content: center; margin-bottom: 10px; }
         .stat-box {
             background: rgba(255,255,255,0.86);
@@ -169,10 +196,12 @@
         #available-spots-container { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
         @media (max-width: 1280px) {
             .app-grid { grid-template-columns: 1fr; }
+            .panel-stack { max-height: none; overflow-y: visible; padding-right: 0; }
             .scene-panel { position: static; }
         }
         @media (max-width: 900px) {
             .app-grid { grid-template-columns: 1fr; }
+            .panel-stack { max-height: none; overflow-y: visible; padding-right: 0; }
             .scene-panel { position: static; }
             #scene-shell { height: 560px; min-height: 460px; }
         }
