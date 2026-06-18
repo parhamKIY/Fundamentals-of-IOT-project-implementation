@@ -439,6 +439,87 @@ def reserve_spot():
         conn.close()
 
 
+@app.route("/api/auto_reserve", methods=["POST"])
+def auto_reserve_spot():
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    start_time = data.get("start_time")
+    end_time = data.get("end_time")
+    payment_confirmed = data.get("payment_confirmed") is True
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    try:
+        start_dt, end_dt = validate_time_range(start_time, end_time)
+        if not user_id:
+            return jsonify({"error": "Missing user"}), 400
+
+        user_is_admin = is_admin_user_id(cursor, user_id)
+        if not payment_confirmed and not user_is_admin:
+            return jsonify({"error": "Payment is required before confirming reservation."}), 402
+
+        cursor.execute("BEGIN IMMEDIATE;")
+        sync_reservations_with_clock(cursor)
+
+        if not user_exists(cursor, user_id):
+            conn.rollback()
+            return jsonify({"error": "User not found"}), 404
+
+        if has_user_overlap(cursor, user_id, start_time, end_time) and not user_is_admin:
+            conn.rollback()
+            return jsonify({"error": "You already have an active reservation in this time range."}), 409
+
+        first_available_spot = None
+        for spot in cursor.execute(
+            "SELECT id, floor, is_occupied FROM Parking_Spots ORDER BY id ASC;"
+        ).fetchall():
+            if is_spot_available(cursor, spot, start_time, end_time, start_dt):
+                first_available_spot = spot
+                break
+
+        if not first_available_spot:
+            conn.rollback()
+            return jsonify({"error": "No reservable parking spots are available for the selected time range."}), 409
+
+        price = 0 if user_is_admin else calculate_base_price(start_dt, end_dt)
+        wallet_balance = get_wallet_balance(cursor, user_id)
+        if not user_is_admin and wallet_balance < price:
+            conn.rollback()
+            return jsonify({"error": "Wallet balance is not enough for this reservation."}), 402
+
+        if not user_is_admin:
+            cursor.execute(
+                "UPDATE Users SET wallet_balance = wallet_balance - ? WHERE id = ?;",
+                (price, user_id),
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO Reservations (user_id, spot_id, start_time, end_time, status, price)
+            VALUES (?, ?, ?, ?, 'Active', ?);
+            """,
+            (user_id, first_available_spot["id"], start_time, end_time, price),
+        )
+        conn.commit()
+        return jsonify(
+            {
+                "message": f"Spot #{first_available_spot['id']} reserved automatically",
+                "spot_id": first_available_spot["id"],
+                "price": price,
+                "wallet_balance": get_wallet_balance(cursor, user_id),
+            }
+        ), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except sqlite3.Error as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
 @app.route("/api/admin/analytics", methods=["GET"])
 def admin_analytics():
     if not is_admin_request():
@@ -886,4 +967,4 @@ def login():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, use_reloader=False)

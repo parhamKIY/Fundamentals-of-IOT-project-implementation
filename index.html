@@ -227,10 +227,10 @@
                             <div class="form-group"><label>Start Time:</label><input type="datetime-local" id="start_time" required></div>
                             <div class="form-group"><label>End Time:</label><input type="datetime-local" id="end_time" required></div>
                         </div>
-                        <button type="submit" class="btn-submit">Find Available Spots</button>
+                        <button type="submit" class="btn-submit">Reserve First Available Spot</button>
                     </form>
                     <div id="spots-result" style="display:none; margin-top: 16px; text-align:center;">
-                        <label>Select a Free Spot to Book:</label>
+                        <label>Available Spots:</label>
                         <div id="available-spots-container"></div>
                     </div>
                     <div id="pricing-box" class="pricing-box">
@@ -1297,7 +1297,35 @@
             document.getElementById('pricing-box').style.display = 'none';
             document.getElementById('pay-button').style.display = 'none';
             document.getElementById('selected-spot-summary').innerText = '';
+            document.getElementById('spots-result').style.display = 'none';
+            document.getElementById('available-spots-container').innerHTML = '';
             pendingReservation = null;
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/auto_reserve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: loggedInUserId, start_time: startTime, end_time: endTime, payment_confirmed: true })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    setMessage(msgDiv, true, `${result.message}. Paid $${Number(result.price || 0).toFixed(2)}.`);
+                    updateWalletDisplay(result.wallet_balance);
+                    document.getElementById('reservation-price').innerText = `$${Number(result.price || 0).toFixed(2)}`;
+                    document.getElementById('pricing-note').innerText = `Reserved Spot #${result.spot_id}`;
+                    document.getElementById('selected-spot-summary').innerText = `Your parking spot is #${result.spot_id}.`;
+                    document.getElementById('pricing-box').style.display = 'block';
+                    await loadUserDashboard();
+                    updateParkingDashboard();
+                    return;
+                }
+                setMessage(msgDiv, false, result.error || 'Reservation failed.');
+            } catch (error) {
+                setMessage(msgDiv, false, 'Server error during reservation.');
+            }
+        });
+
+        async function searchAvailableSpots(startTime, endTime) {
+            const msgDiv = document.getElementById('reserve-message');
             try {
                 const response = await fetch('http://127.0.0.1:5000/api/search_spots', {
                     method: 'POST',
@@ -1336,7 +1364,7 @@
             } catch (error) {
                 setMessage(msgDiv, false, 'Server error during search.');
             }
-        });
+        }
 
         function selectSpotForPayment(spotId, startTime, endTime, price) {
             pendingReservation = { spotId, startTime, endTime };
