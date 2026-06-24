@@ -348,11 +348,13 @@
             }
         }
     </script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script type="module">
         import * as ThreeModule from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        const THREE = { ...ThreeModule, GLTFLoader };
+        const THREE = { ...ThreeModule, GLTFLoader, OrbitControls };
 
         let loggedInUserId = null;
         const apiUrl = 'http://127.0.0.1:5000/api/spots';
@@ -366,9 +368,16 @@
         const spotLayout = {};
         const carObjects = new Map();
         const carLabels = new Map();
+        const spotLedMeshes = new Map();
+        let walkInCarSequence = 0;
         const carColors = ['#e74c3c', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#2ecc71', '#ff8fa3', '#7bdff2'];
         const carLoader = new THREE.GLTFLoader();
         const CAR_FIXED_Y = 0.35;
+        const BOOKING_BOOTH_CENTER = { x: -5.8, z: -1.35, r: Math.PI / 2 };
+        const ENTRANCE_GATE_STOP = { x: -6.35, z: 0, r: Math.PI / 2 };
+        const ENTRY_POINT = { x: -6.8, z: 0, r: Math.PI / 2 };
+        const EXIT_POINT = { x: 6.9, z: 0, r: Math.PI / 2 };
+        let boothTransactionIndicator = null;
         const sceneShell = document.getElementById('scene-shell');
         const canvas = document.getElementById('three-canvas');
         const scene = new THREE.Scene();
@@ -383,6 +392,15 @@
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.target.set(0, 0, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.maxPolarAngle = Math.PI / 2.1;
+        controls.minDistance = 7;
+        controls.maxDistance = 16;
+        controls.update();
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
@@ -603,6 +621,7 @@
             const windowMaterial = makeMaterial(0x2f3d4b);
             windowMaterial.roughness = 0.55;
             const windowMesh = createSoftBox(0.38, 0.18, 0.035, 0.015, 0x2f3d4b);
+            windowMesh.name = 'window';
             windowMesh.material = windowMaterial;
             windowMesh.position.set(0, 0.42, -0.335);
             house.add(windowMesh);
@@ -611,7 +630,40 @@
             door.position.set(-0.22, 0.23, -0.34);
             house.add(door);
 
-            house.position.set(-5.8, 0.02, -1.35);
+            const indicator = new THREE.Group();
+            indicator.name = 'transaction-indicator';
+
+            const ringMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffd84d,
+                emissive: 0xffc400,
+                emissiveIntensity: 2.4,
+                roughness: 0.28,
+                metalness: 0.05,
+                transparent: true,
+                opacity: 0.92
+            });
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 16, 48), ringMaterial);
+            ring.rotation.x = -Math.PI / 2;
+            indicator.add(ring);
+
+            const orbMaterial = new THREE.MeshStandardMaterial({
+                color: 0xfff2a6,
+                emissive: 0xffd84d,
+                emissiveIntensity: 1.8,
+                roughness: 0.35
+            });
+            const orb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 20, 16), orbMaterial);
+            orb.position.y = 0.03;
+            indicator.add(orb);
+
+            indicator.position.set(0, 1.02, 0);
+            indicator.scale.setScalar(0);
+            indicator.visible = false;
+            house.add(indicator);
+            boothTransactionIndicator = indicator;
+
+            house.name = 'booking-booth';
+            house.position.set(BOOKING_BOOTH_CENTER.x, 0.02, BOOKING_BOOTH_CENTER.z);
             house.rotation.y = 0.1;
             enableDioramaShadows(house);
             scene.add(house);
@@ -816,6 +868,33 @@
             }
         }
 
+        function createSpotLed(spotId) {
+            const layout = spotLayout[spotId];
+            const geometry = new THREE.SphereGeometry(0.13, 24, 16);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x2ecc71,
+                emissive: 0x2ecc71,
+                emissiveIntensity: 1.9,
+                roughness: 0.35,
+                metalness: 0.05
+            });
+            const led = new THREE.Mesh(geometry, material);
+            const backOffset = layout.row === 'top' ? -0.62 : 0.62;
+            led.position.set(layout.x, 0.42, layout.z + backOffset);
+            led.name = `spot-led-${spotId}`;
+            led.castShadow = true;
+            scene.add(led);
+            spotLedMeshes.set(spotId, led);
+        }
+
+        function updateSpotLed(spotId, isOccupied) {
+            const led = spotLedMeshes.get(Number(spotId));
+            if (!led) return;
+            const color = isOccupied ? 0xe74c3c : 0x2ecc71;
+            led.material.color.setHex(color);
+            led.material.emissive.setHex(color);
+        }
+
         function initParkingScene() {
             addDioramaEnvironment();
 
@@ -848,17 +927,10 @@
                 bottomSpot.receiveShadow = true;
                 scene.add(bottomSpot);
                 addLineBox(x, 2.45, 1.55, 1.6, 0xf8f6f0);
+
+                createSpotLed(topId);
+                createSpotLed(bottomId);
             });
-
-            const entrance = createSoftBox(0.18, 0.35, 1.55, 0.08, 0x2ecc71);
-            entrance.position.set(-6.08, 0.36, 0);
-            entrance.castShadow = true;
-            scene.add(entrance);
-
-            const exit = createSoftBox(0.18, 0.35, 1.55, 0.08, 0xe74c3c);
-            exit.position.set(6.08, 0.36, 0);
-            exit.castShadow = true;
-            scene.add(exit);
         }
 
         function loadCarMesh(spotId, reservedBy) {
@@ -967,30 +1039,133 @@
             return a + diff * t;
         }
 
+        function isFiniteNumber(value) {
+            return Number.isFinite(Number(value));
+        }
+
+        function isValidWaypoint(point) {
+            return Boolean(point)
+                && isFiniteNumber(point.x)
+                && isFiniteNumber(point.z)
+                && isFiniteNumber(point.r);
+        }
+
+        function isValidSpotLayout(layout) {
+            return Boolean(layout)
+                && isFiniteNumber(layout.x)
+                && isFiniteNumber(layout.z)
+                && isFiniteNumber(layout.rotation);
+        }
+
+        function lockCarToWaypoint(car, point) {
+            if (!car || !isValidWaypoint(point)) return;
+            car.position.set(Number(point.x), CAR_FIXED_Y, Number(point.z));
+            car.rotation.y = Number(point.r);
+        }
+
+        function normalizeWaypoint(point) {
+            if (!isValidWaypoint(point)) return null;
+            return {
+                x: Number(point.x),
+                z: Number(point.z),
+                r: Number(point.r)
+            };
+        }
+
+        function normalizePath(keyframes) {
+            if (!Array.isArray(keyframes) || keyframes.length < 2) return null;
+            const path = keyframes.map(normalizeWaypoint);
+            return path.every(Boolean) ? path : null;
+        }
+
         function animatePath(car, keyframes, duration = 2500) {
+            return new Promise((resolve) => {
+                const safePath = normalizePath(keyframes);
+                if (!car || !safePath) {
+                    console.warn('Skipping invalid animation path', { car, keyframes });
+                    resolve(false);
+                    return;
+                }
+
+                const start = performance.now();
+                const step = (now) => {
+                    try {
+                        if (!car || !safePath.every(isValidWaypoint)) {
+                            resolve(false);
+                            return;
+                        }
+
+                        const elapsed = Math.min(now - start, duration);
+                        const raw = elapsed / duration;
+                        const segmentCount = safePath.length - 1;
+                        const scaled = Math.min(raw * segmentCount, segmentCount - 0.0001);
+                        const index = Math.floor(scaled);
+                        const localT = easeInOut(scaled - index);
+                        const a = safePath[index];
+                        const b = safePath[index + 1];
+
+                        if (!isValidWaypoint(a) || !isValidWaypoint(b)) {
+                            requestAnimationFrame(step);
+                            return;
+                        }
+
+                        car.position.set(
+                            THREE.MathUtils.lerp(a.x, b.x, localT),
+                            CAR_FIXED_Y,
+                            THREE.MathUtils.lerp(a.z, b.z, localT)
+                        );
+                        car.rotation.y = lerpAngle(a.r, b.r, localT);
+                        if (elapsed < duration) {
+                            requestAnimationFrame(step);
+                        } else {
+                            lockCarToWaypoint(car, safePath[safePath.length - 1]);
+                            resolve(true);
+                        }
+                    } catch (error) {
+                        console.error('Animation path error:', error);
+                        resolve(false);
+                    }
+                };
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function requestOnSiteBooking() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/bookings/on-site', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source: 'walk_in_booth' })
+                });
+                if (!response.ok) {
+                    console.warn('On-site booking rejected:', await response.text());
+                    return null;
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('On-site booking error:', error);
+                return null;
+            }
+        }
+
+        function getValidAssignedLayout(booking) {
+            if (!booking?.spot_id) return null;
+            const layout = spotLayout[Number(booking.spot_id)] || {
+                x: booking.coordinates?.x,
+                z: booking.coordinates?.z,
+                rotation: booking.coordinates?.rotation
+            };
+            return isValidSpotLayout(layout) ? layout : null;
+        }
+
+        function waitWithStationaryLock(ms, stationaryCar, stationaryPoint) {
             return new Promise((resolve) => {
                 const start = performance.now();
                 const step = (now) => {
-                    const elapsed = Math.min(now - start, duration);
-                    const raw = elapsed / duration;
-                    const segmentCount = keyframes.length - 1;
-                    const scaled = Math.min(raw * segmentCount, segmentCount - 0.0001);
-                    const index = Math.floor(scaled);
-                    const localT = easeInOut(scaled - index);
-                    const a = keyframes[index];
-                    const b = keyframes[index + 1];
-                    car.position.set(
-                        THREE.MathUtils.lerp(a.x, b.x, localT),
-                        CAR_FIXED_Y,
-                        THREE.MathUtils.lerp(a.z, b.z, localT)
-                    );
-                    car.rotation.y = lerpAngle(a.r, b.r, localT);
-                    if (elapsed < duration) {
+                    if (stationaryCar && stationaryPoint) lockCarToWaypoint(stationaryCar, stationaryPoint);
+                    if (now - start < ms) {
                         requestAnimationFrame(step);
                     } else {
-                        const end = keyframes[keyframes.length - 1];
-                        car.position.set(end.x, CAR_FIXED_Y, end.z);
-                        car.rotation.y = end.r;
                         resolve();
                     }
                 };
@@ -998,46 +1173,193 @@
             });
         }
 
+        function animateScale(mesh, toScale, durationMs, stationaryCar = null, stationaryPoint = null) {
+            return new Promise((resolve) => {
+                if (!mesh || !isFiniteNumber(toScale)) {
+                    resolve(false);
+                    return;
+                }
+
+                mesh.visible = true;
+                const fromScale = Number(mesh.scale.x || 0);
+                const targetScale = Number(toScale);
+                const start = performance.now();
+
+                const step = (now) => {
+                    try {
+                        if (stationaryCar && stationaryPoint) lockCarToWaypoint(stationaryCar, stationaryPoint);
+
+                        const t = Math.min((now - start) / durationMs, 1);
+                        const eased = easeInOut(t);
+                        const scale = THREE.MathUtils.lerp(fromScale, targetScale, eased);
+                        mesh.scale.setScalar(scale);
+
+                        if (t < 1) {
+                            requestAnimationFrame(step);
+                        } else {
+                            mesh.scale.setScalar(targetScale);
+                            mesh.visible = targetScale > 0;
+                            resolve(true);
+                        }
+                    } catch (error) {
+                        console.error('Transaction indicator scale error:', error);
+                        resolve(false);
+                    }
+                };
+
+                requestAnimationFrame(step);
+            });
+        }
+
+        function bobTransactionIndicator(ms, stationaryCar, stationaryPoint) {
+            return new Promise((resolve) => {
+                const indicator = boothTransactionIndicator || scene.getObjectByName('transaction-indicator');
+                if (!indicator) {
+                    waitWithStationaryLock(ms, stationaryCar, stationaryPoint).then(resolve);
+                    return;
+                }
+
+                const baseY = Number(indicator.userData.baseY ?? indicator.position.y);
+                indicator.userData.baseY = baseY;
+                const start = performance.now();
+
+                const step = (now) => {
+                    try {
+                        if (stationaryCar && stationaryPoint) lockCarToWaypoint(stationaryCar, stationaryPoint);
+                        const elapsed = now - start;
+                        indicator.position.y = baseY + Math.sin(elapsed * 0.008) * 0.08;
+                        indicator.rotation.y += 0.045;
+
+                        if (elapsed < ms) {
+                            requestAnimationFrame(step);
+                        } else {
+                            indicator.position.y = baseY;
+                            resolve(true);
+                        }
+                    } catch (error) {
+                        console.error('Transaction indicator bob error:', error);
+                        resolve(false);
+                    }
+                };
+
+                requestAnimationFrame(step);
+            });
+        }
+
+        async function animateTransactionIndicator(stationaryCar, stationaryPoint, bookingPromise) {
+            const indicator = boothTransactionIndicator || scene.getObjectByName('transaction-indicator');
+            if (!indicator) {
+                await waitWithStationaryLock(2500, stationaryCar, stationaryPoint);
+                return bookingPromise;
+            }
+
+            indicator.userData.baseY = Number(indicator.userData.baseY ?? indicator.position.y);
+            indicator.position.y = indicator.userData.baseY;
+            indicator.scale.setScalar(0);
+            indicator.visible = true;
+
+            await animateScale(indicator, 1, 450, stationaryCar, stationaryPoint);
+            const [booking] = await Promise.all([
+                bookingPromise,
+                bobTransactionIndicator(2000, stationaryCar, stationaryPoint)
+            ]);
+            await animateScale(indicator, 0, 350, stationaryCar, stationaryPoint);
+            lockCarToWaypoint(stationaryCar, stationaryPoint);
+            return booking;
+        }
+
         async function processQueue() {
             if (isAnimationRunning || animationQueue.length === 0) return;
             isAnimationRunning = true;
             const task = animationQueue.shift();
-            const layout = spotLayout[task.spotId];
+            try {
+                const layout = spotLayout[task.spotId];
 
-            if (task.type === 'ENTRY') {
-                const oldCar = carObjects.get(task.spotId);
-                if (oldCar) {
-                    scene.remove(oldCar);
-                    carObjects.delete(task.spotId);
-                    removeCarLabel(task.spotId);
-                }
-                const car = await loadCarMesh(task.spotId, task.reservedBy);
-                scene.add(car);
-                carObjects.set(task.spotId, car);
-                setCarLabel(task.spotId, car, task.reservedBy);
-                await animatePath(car, [
-                    { x: -6.8, z: 0, r: Math.PI / 2 },
-                    { x: layout.x, z: 0, r: Math.PI / 2 },
-                    { x: layout.x, z: 0, r: layout.rotation },
-                    { x: layout.x, z: layout.z, r: layout.rotation }
-                ]);
-            } else if (task.type === 'EXIT') {
-                const car = carObjects.get(task.spotId);
-                if (car) {
+                if (task.type === 'ENTRY') {
+                    if (!isValidSpotLayout(layout)) return;
+                    const oldCar = carObjects.get(task.spotId);
+                    if (oldCar) {
+                        scene.remove(oldCar);
+                        carObjects.delete(task.spotId);
+                        removeCarLabel(task.spotId);
+                    }
+                    const car = await loadCarMesh(task.spotId, task.reservedBy);
+                    scene.add(car);
+                    carObjects.set(task.spotId, car);
+                    setCarLabel(task.spotId, car, task.reservedBy);
                     await animatePath(car, [
-                        { x: layout.x, z: layout.z, r: layout.rotation },
-                        { x: layout.x, z: 0, r: layout.rotation },
+                        ENTRY_POINT,
                         { x: layout.x, z: 0, r: Math.PI / 2 },
-                        { x: 6.9, z: 0, r: Math.PI / 2 }
+                        { x: layout.x, z: 0, r: layout.rotation },
+                        { x: layout.x, z: layout.z, r: layout.rotation }
                     ]);
-                    scene.remove(car);
-                    carObjects.delete(task.spotId);
-                    removeCarLabel(task.spotId);
-                }
-            }
+                } else if (task.type === 'EXIT') {
+                    if (!isValidSpotLayout(layout)) return;
+                    const car = carObjects.get(task.spotId);
+                    if (car) {
+                        await animatePath(car, [
+                            { x: layout.x, z: layout.z, r: layout.rotation },
+                            { x: layout.x, z: 0, r: layout.rotation },
+                            { x: layout.x, z: 0, r: Math.PI / 2 },
+                            EXIT_POINT
+                        ]);
+                        scene.remove(car);
+                        carObjects.delete(task.spotId);
+                        removeCarLabel(task.spotId);
+                    }
+                } else if (task.type === 'WALK_IN') {
+                    const car = await loadCarMesh(`walk-in-${++walkInCarSequence}`, null);
+                    scene.add(car);
+                    await animatePath(car, [
+                        ENTRY_POINT,
+                        ENTRANCE_GATE_STOP
+                    ], 900);
 
-            isAnimationRunning = false;
-            processQueue();
+                    lockCarToWaypoint(car, ENTRANCE_GATE_STOP);
+
+                    try {
+                        const booking = await animateTransactionIndicator(
+                            car,
+                            ENTRANCE_GATE_STOP,
+                            requestOnSiteBooking()
+                        );
+                        const assignedLayout = getValidAssignedLayout(booking);
+
+                        if (!assignedLayout) {
+                            await animatePath(car, [
+                                ENTRANCE_GATE_STOP,
+                                EXIT_POINT
+                            ], 1700);
+                            scene.remove(car);
+                            return;
+                        }
+
+                        lockCarToWaypoint(car, ENTRANCE_GATE_STOP);
+                        carObjects.set(Number(booking.spot_id), car);
+                        applySpotStatusUpdate(booking.spot_id, true, null, false, 'walk_in');
+                        updateAvailableCount();
+                        await animatePath(car, [
+                            ENTRANCE_GATE_STOP,
+                            { x: assignedLayout.x, z: 0, r: Math.PI / 2 },
+                            { x: assignedLayout.x, z: 0, r: assignedLayout.rotation },
+                            { x: assignedLayout.x, z: assignedLayout.z, r: assignedLayout.rotation }
+                        ], 2600);
+                    } catch (error) {
+                        console.error('Walk-in booth transition error:', error);
+                        lockCarToWaypoint(car, ENTRANCE_GATE_STOP);
+                        await animatePath(car, [
+                            ENTRANCE_GATE_STOP,
+                            EXIT_POINT
+                        ], 1700);
+                        scene.remove(car);
+                    }
+                }
+            } catch (error) {
+                console.error('Animation queue task failed:', error, task);
+            } finally {
+                isAnimationRunning = false;
+                processQueue();
+            }
         }
 
         function resizeRenderer() {
@@ -1049,10 +1371,16 @@
         }
 
         function renderLoop() {
-            resizeRenderer();
-            updateCarLabels();
-            renderer.render(scene, camera);
-            requestAnimationFrame(renderLoop);
+            try {
+                resizeRenderer();
+                controls.update();
+                updateCarLabels();
+                renderer.render(scene, camera);
+            } catch (error) {
+                console.error('Render loop error:', error);
+            } finally {
+                requestAnimationFrame(renderLoop);
+            }
         }
 
         function toggleAuthPanel(panel) {
@@ -1440,28 +1768,55 @@
                 const response = await fetch(apiUrl);
                 if (!response.ok) throw new Error('Network error');
                 const spots = await response.json();
-                let availableCount = 0;
                 spots.forEach(spot => {
-                    const isCurrentlyOccupied = spot.is_occupied;
-                    const wasOccupied = previousState[spot.id];
-                    if (!isCurrentlyOccupied) availableCount++;
-
-                    if (wasOccupied === undefined && isCurrentlyOccupied) {
-                        setCarStatic(spot.id, spot.reserved_by);
-                    }
-                    if (wasOccupied !== undefined && isCurrentlyOccupied && wasOccupied === false) {
-                        animationQueue.push({ type: 'ENTRY', spotId: spot.id, reservedBy: spot.reserved_by });
-                    } else if (wasOccupied !== undefined && !isCurrentlyOccupied && wasOccupied === true) {
-                        animationQueue.push({ type: 'EXIT', spotId: spot.id });
-                    }
-                    previousState[spot.id] = isCurrentlyOccupied;
+                    applySpotStatusUpdate(spot.id, spot.is_occupied, spot.reserved_by, true);
                 });
-                document.getElementById('available-spots').innerText = availableCount;
+                updateAvailableCount();
                 processQueue();
             } catch (error) {
                 console.error('Data fetch error:', error);
             }
         }
+
+        function updateAvailableCount() {
+            const knownStates = Object.values(previousState);
+            const availableCount = knownStates.filter(isOccupied => !isOccupied).length;
+            document.getElementById('available-spots').innerText = availableCount;
+        }
+
+        function applySpotStatusUpdate(spotId, isOccupied, reservedBy, isInitialLoad = false, source = null) {
+            const id = Number(spotId);
+            const isCurrentlyOccupied = Boolean(isOccupied);
+            const wasOccupied = previousState[id];
+
+            updateSpotLed(id, isCurrentlyOccupied);
+
+            if (source === 'walk_in' && isCurrentlyOccupied) {
+                previousState[id] = true;
+                return;
+            }
+
+            if (wasOccupied === undefined && isCurrentlyOccupied) {
+                setCarStatic(id, reservedBy);
+            } else if (!isInitialLoad && isCurrentlyOccupied && wasOccupied === false) {
+                animationQueue.push({ type: 'ENTRY', spotId: id, reservedBy });
+            } else if (!isInitialLoad && !isCurrentlyOccupied && wasOccupied === true) {
+                animationQueue.push({ type: 'EXIT', spotId: id });
+            }
+
+            previousState[id] = isCurrentlyOccupied;
+        }
+
+        const socket = window.io('http://127.0.0.1:5000');
+        socket.on('spot_status_update', ({ spot_id, is_occupied, reserved_by, source }) => {
+            applySpotStatusUpdate(spot_id, is_occupied, reserved_by, false, source);
+            updateAvailableCount();
+            processQueue();
+        });
+        socket.on('walk_in_arrival', () => {
+            animationQueue.push({ type: 'WALK_IN' });
+            processQueue();
+        });
 
         initParkingScene();
         renderLoop();
@@ -1476,7 +1831,6 @@
             sensorOption.innerText = `Spot #${spotId}`;
             document.getElementById('sensor_spot_id').appendChild(sensorOption);
         }
-        setInterval(updateParkingDashboard, 2000);
     </script>
 </body>
 </html>

@@ -5,6 +5,7 @@ import subprocess
 import sys
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_socketio import SocketIO
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
@@ -15,12 +16,39 @@ print("Continuing app.py execution...")
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 TIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 ADMIN_PIN = os.environ.get("PARKING_ADMIN_PIN", "admin123")
 EARLY_EXIT_GRACE_SECONDS = 30
 ADMIN_USERNAME = "ADMIN"
 ADMIN_PASSWORD = "1234"
+
+
+SPOT_COORDINATES = {
+    1: {"x": -4.35, "z": -2.45, "rotation": 3.141592653589793},
+    2: {"x": -2.18, "z": -2.45, "rotation": 3.141592653589793},
+    3: {"x": 0, "z": -2.45, "rotation": 3.141592653589793},
+    4: {"x": 2.18, "z": -2.45, "rotation": 3.141592653589793},
+    5: {"x": 4.35, "z": -2.45, "rotation": 3.141592653589793},
+    6: {"x": -4.35, "z": 2.45, "rotation": 0},
+    7: {"x": -2.18, "z": 2.45, "rotation": 0},
+    8: {"x": 0, "z": 2.45, "rotation": 0},
+    9: {"x": 2.18, "z": 2.45, "rotation": 0},
+    10: {"x": 4.35, "z": 2.45, "rotation": 0},
+}
+
+
+def broadcast_spot_status(spot_id, is_occupied, source=None, reserved_by=None):
+    socketio.emit(
+        "spot_status_update",
+        {
+            "spot_id": int(spot_id),
+            "is_occupied": bool(is_occupied),
+            "source": source,
+            "reserved_by": reserved_by,
+        },
+    )
 
 
 def get_db_connection():
@@ -137,6 +165,22 @@ def get_admin_user_id(cursor):
     cursor.execute(
         "INSERT INTO Users (username, password, plate_number, wallet_balance) VALUES (?, ?, ?, 0);",
         (ADMIN_USERNAME, generate_password_hash(ADMIN_PASSWORD), "ADMIN"),
+    )
+    return cursor.lastrowid
+
+
+def get_walk_in_user_id(cursor):
+    username = "WALK-IN-CUSTOMER"
+    user = cursor.execute(
+        "SELECT id FROM Users WHERE username = ?;",
+        (username,),
+    ).fetchone()
+    if user:
+        return user["id"]
+
+    cursor.execute(
+        "INSERT INTO Users (username, password, plate_number, wallet_balance) VALUES (?, ?, ?, 0);",
+        (username, generate_password_hash("walk-in"), "WALK-IN"),
     )
     return cursor.lastrowid
 
@@ -314,7 +358,7 @@ def get_parking_spots():
                 "id": s["id"],
                 "floor": s["floor"],
                 "is_occupied": bool(s["is_occupied"]),
-                "reserved_by": s["username"],
+                "reserved_by": None if (s["username"] or "").startswith("WALK-IN-") else s["username"],
             }
             for s in spots
         ]
@@ -888,8 +932,91 @@ def admin_sensor_spot():
             (1 if is_occupied else 0, spot_id),
         )
         conn.commit()
+        broadcast_spot_status(spot_id, is_occupied)
         status = "occupied" if is_occupied else "empty"
         return jsonify({"message": f"Sensor for spot #{spot_id} set to {status}"}), 200
+    except sqlite3.Error as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/sensor/spot_status", methods=["POST"])
+def sensor_spot_status():
+    data = request.get_json() or {}
+    spot_id = data.get("spot_id")
+    is_occupied = data.get("is_occupied")
+    if is_occupied not in (True, False):
+        return jsonify({"error": "Sensor status must be true or false"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if not spot_exists(cursor, spot_id):
+            return jsonify({"error": "Parking spot not found"}), 404
+        broadcast_spot_status(spot_id, is_occupied)
+        return jsonify({"message": "Spot status broadcast"}), 200
+    finally:
+        conn.close()
+
+
+@app.route("/api/sensor/walk_in_arrival", methods=["POST"])
+def sensor_walk_in_arrival():
+    socketio.emit("walk_in_arrival", {"created_at": datetime.now().strftime(TIME_FORMAT)})
+    return jsonify({"message": "Walk-in arrival broadcast"}), 200
+
+
+@app.route("/api/bookings/on-site", methods=["POST"])
+def create_on_site_booking():
+    now = datetime.now()
+    start_time = now.strftime(TIME_FORMAT)
+    end_time = (now + timedelta(minutes=20)).strftime(TIME_FORMAT)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA foreign_keys = ON;")
+
+    try:
+        cursor.execute("BEGIN IMMEDIATE;")
+        sync_reservations_with_clock(cursor)
+        spot = cursor.execute(
+            """
+            SELECT id, floor, is_occupied
+            FROM Parking_Spots
+            WHERE is_occupied = 0
+            ORDER BY id ASC
+            LIMIT 1;
+            """
+        ).fetchone()
+        if not spot:
+            conn.rollback()
+            return jsonify({"error": "No empty spot is available for walk-in booking."}), 409
+
+        user_id = get_walk_in_user_id(cursor)
+        cursor.execute(
+            """
+            INSERT INTO Reservations (user_id, spot_id, start_time, end_time, status, price)
+            VALUES (?, ?, ?, ?, 'Active', 0);
+            """,
+            (user_id, spot["id"], start_time, end_time),
+        )
+        cursor.execute(
+            "UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?;",
+            (spot["id"],),
+        )
+        conn.commit()
+
+        broadcast_spot_status(spot["id"], True, source="walk_in", reserved_by=None)
+        return jsonify(
+            {
+                "spot_id": spot["id"],
+                "is_occupied": True,
+                "coordinates": SPOT_COORDINATES.get(spot["id"]),
+                "start_time": start_time,
+                "end_time": end_time,
+            }
+        ), 201
     except sqlite3.Error as e:
         conn.rollback()
         return jsonify({"error": str(e)}), 500
@@ -967,4 +1094,4 @@ def login():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000, use_reloader=False)
+    socketio.run(app, debug=True, port=5000, use_reloader=False, allow_unsafe_werkzeug=True)
