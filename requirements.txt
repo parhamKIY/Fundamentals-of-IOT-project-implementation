@@ -2,3 +2,5 @@ Flask
 Werkzeug
 requests
 flask_cors
+flask-socketio
+simple-websocket

@@ -1,6 +1,7 @@
 import sqlite3
 import random
 import time
+import requests
 from datetime import datetime, timedelta
 
 
@@ -18,6 +19,31 @@ SIM_RESERVATION_TARGET_MAX = 3
 DEMO_CAR_MIN_STAY_SECONDS = 45
 DEMO_CAR_MAX_STAY_SECONDS = 75
 DEMO_CAR_EMPTY_PAUSE_SECONDS = 20
+SENSOR_NOTIFY_URL = "http://127.0.0.1:5000/api/sensor/spot_status"
+WALK_IN_ARRIVAL_URL = "http://127.0.0.1:5000/api/sensor/walk_in_arrival"
+
+
+def fetch_spot_states(cursor):
+    cursor.execute("SELECT id, is_occupied FROM Parking_Spots")
+    return {spot_id: bool(is_occupied) for spot_id, is_occupied in cursor.fetchall()}
+
+
+def notify_spot_status(spot_id, is_occupied):
+    try:
+        requests.post(
+            SENSOR_NOTIFY_URL,
+            json={"spot_id": spot_id, "is_occupied": bool(is_occupied)},
+            timeout=1,
+        )
+    except requests.RequestException:
+        pass
+
+
+def notify_walk_in_arrival():
+    try:
+        requests.post(WALK_IN_ARRIVAL_URL, json={}, timeout=1)
+    except requests.RequestException:
+        pass
 
 
 def ensure_sim_users(cursor):
@@ -94,6 +120,7 @@ def simulate_environment():
     while True:
         conn = sqlite3.connect('parking.db')
         cursor = conn.cursor()
+        before_states = fetch_spot_states(cursor)
         now = datetime.now()
         now_str = now.strftime('%Y-%m-%d %H:%M:%S')
         create_random_hourly_reservations(cursor, now)
@@ -128,41 +155,20 @@ def simulate_environment():
         """, (now_str, now_str))
 
         if demo_spot_id is not None and now >= demo_leave_at:
-            cursor.execute("""
-                SELECT 1 FROM Reservations
-                WHERE status = 'Active'
-                AND spot_id = ?
-                AND start_time <= ?
-                AND end_time > ?
-                LIMIT 1
-            """, (demo_spot_id, now_str, now_str))
-            if not cursor.fetchone():
-                cursor.execute("UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?", (demo_spot_id,))
             demo_spot_id = None
             next_demo_entry_at = now + timedelta(seconds=DEMO_CAR_EMPTY_PAUSE_SECONDS)
 
         if demo_spot_id is None and now >= next_demo_entry_at:
-            buffer_time = (now + timedelta(minutes=1)).strftime('%Y-%m-%d %H:%M:%S')
-            cursor.execute("""
-                SELECT id FROM Parking_Spots
-                WHERE is_occupied = 0
-                AND id NOT IN (
-                    SELECT spot_id FROM Reservations
-                    WHERE status = 'Active'
-                    AND start_time <= ?
-                    AND end_time > ?
-                )
-                ORDER BY RANDOM()
-                LIMIT 1
-            """, (buffer_time, now_str))
-            row = cursor.fetchone()
-            if row:
-                demo_spot_id = row[0]
-                demo_leave_at = now + timedelta(seconds=random.randint(DEMO_CAR_MIN_STAY_SECONDS, DEMO_CAR_MAX_STAY_SECONDS))
-                cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (demo_spot_id,))
+            demo_spot_id = -1
+            demo_leave_at = now + timedelta(seconds=random.randint(DEMO_CAR_MIN_STAY_SECONDS, DEMO_CAR_MAX_STAY_SECONDS))
+            notify_walk_in_arrival()
         
         conn.commit()
+        after_states = fetch_spot_states(cursor)
         conn.close()
+        for spot_id, is_occupied in after_states.items():
+            if before_states.get(spot_id) != is_occupied:
+                notify_spot_status(spot_id, is_occupied)
         time.sleep(random.randint(4, 8))
 
 if __name__ == "__main__":
