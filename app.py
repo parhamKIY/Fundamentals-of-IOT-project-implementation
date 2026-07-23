@@ -9,6 +9,8 @@ from flask_socketio import SocketIO
 from werkzeug.security import check_password_hash, generate_password_hash
 
 
+# Run the sensor simulator alongside the API without enabling Flask's reloader,
+# which would otherwise start a duplicate simulator process.
 sensor_process = subprocess.Popen([sys.executable, "sensor_sim.py"])
 
 print("Sensor simulator started in the background.")
@@ -59,6 +61,7 @@ def get_db_connection():
 
 
 def ensure_schema(conn):
+    # Apply lightweight migrations so existing databases remain compatible.
     tables = {
         row[0]
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table';").fetchall()
@@ -194,6 +197,7 @@ def get_wallet_balance(cursor, user_id):
 
 
 def sync_reservations_with_clock(cursor):
+    # Reconcile reservation status and physical occupancy with the current time.
     now_str = datetime.now().strftime(TIME_FORMAT)
     early_exit_limit = (datetime.now() - timedelta(seconds=EARLY_EXIT_GRACE_SECONDS)).strftime(TIME_FORMAT)
 
@@ -268,6 +272,8 @@ def sync_reservations_with_clock(cursor):
 
 
 def is_physically_available_by_start(cursor, spot, start_dt, start_time, end_time):
+    # Near-term reservations require an empty spot; later bookings may use a spot
+    # that is expected to become free before the requested start time.
     now = datetime.now()
     has_current_reservation = cursor.execute(
         """
@@ -427,6 +433,7 @@ def reserve_spot():
         if not payment_confirmed and not user_is_admin:
             return jsonify({"error": "Payment is required before confirming reservation."}), 402
 
+        # Lock before checking availability to prevent concurrent double booking.
         cursor.execute("BEGIN IMMEDIATE;")
         sync_reservations_with_clock(cursor)
 

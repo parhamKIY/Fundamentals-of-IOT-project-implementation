@@ -120,7 +120,7 @@ header p { color: #64748b; margin-top: 0; }
 .entrance-gate { left: 14px; border-left: 5px solid #2ecc71; }
 .exit-gate { right: 14px; border-right: 5px solid #ef4444; }
 
-/* ردیف‌های پارکینگ - اصلاح شده با عرض فیکس و توزیع مساوی */
+/* Parking rows use a fixed width and evenly distributed spaces. */
 .parking-row {
     position: absolute;
     left: 100px;
@@ -179,7 +179,7 @@ header p { color: #64748b; margin-top: 0; }
     text-shadow: 0 2px 4px rgba(0,0,0,0.28);
 }
 
-/* استایل بدنه ماشین */
+/* Car body styling. */
 .car {
     position: absolute;
     width: 48px;
@@ -264,7 +264,7 @@ header p { color: #64748b; margin-top: 0; }
 .headlight-r { right: 7px; }
 
 /* ==========================================================================
-   مختصات دقیق و ثابت استقرار ماشین‌های ایستا
+   Fixed coordinates for statically parked cars
    ========================================================================== */
 .parked-static-spot-1  { top: 32px; left: 132.5px; transform: rotate(180deg); }
 .parked-static-spot-2  { top: 32px; left: 305px; transform: rotate(180deg); }
@@ -279,7 +279,7 @@ header p { color: #64748b; margin-top: 0; }
 .parked-static-spot-10 { top: 402px; left: 822.5px; transform: rotate(0deg); }
 
 /* ==========================================================================
-   انیمیشن‌های نهایی گام‌به‌گام ورود
+   Step-by-step entry animations
    ========================================================================== */
 .enter-spot-1  { animation: enterRowTop 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 132.5px; }
 .enter-spot-2  { animation: enterRowTop 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 305px; }
@@ -294,7 +294,7 @@ header p { color: #64748b; margin-top: 0; }
 .enter-spot-10 { animation: enterRowBottom 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 822.5px; }
 
 /* ==========================================================================
-   انیمیشن‌های نهایی گام‌به‌گام خروج
+   Step-by-step exit animations
    ========================================================================== */
 .exit-spot-1  { animation: exitRowTop 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 132.5px; }
 .exit-spot-2  { animation: exitRowTop 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 305px; }
@@ -309,7 +309,7 @@ header p { color: #64748b; margin-top: 0; }
 .exit-spot-10 { animation: exitRowBottom 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; --target-x: 822.5px; }
 
 /* ==========================================================================
-   فریم‌های کلیدی انیمیشن‌ها
+   Animation keyframes
    ========================================================================== */
 @keyframes enterRowTop {
     0% { top: 218px; left: -80px; transform: rotate(90deg); }

@@ -23,6 +23,7 @@ SENSOR_NOTIFY_URL = "http://127.0.0.1:5000/api/sensor/spot_status"
 WALK_IN_ARRIVAL_URL = "http://127.0.0.1:5000/api/sensor/walk_in_arrival"
 
 
+# Read all sensor states before and after each cycle so only changes are broadcast.
 def fetch_spot_states(cursor):
     cursor.execute("SELECT id, is_occupied FROM Parking_Spots")
     return {spot_id: bool(is_occupied) for spot_id, is_occupied in cursor.fetchall()}
@@ -59,6 +60,7 @@ def ensure_sim_users(cursor):
 
 
 def create_random_hourly_reservations(cursor, now):
+    # Generate a small, bounded set of demo reservations for the current hour.
     hour_start = now.replace(minute=0, second=0, microsecond=0)
     hour_end = hour_start + timedelta(hours=1)
     hour_start_str = hour_start.strftime('%Y-%m-%d %H:%M:%S')
@@ -125,24 +127,24 @@ def simulate_environment():
         now_str = now.strftime('%Y-%m-%d %H:%M:%S')
         create_random_hourly_reservations(cursor, now)
         
-        # ۱. پاکسازی رزروهای منقضی شده
+        # 1. Complete expired reservations and release their parking spots.
         cursor.execute("SELECT spot_id, id FROM Reservations WHERE status = 'Active' AND end_time <= ?", (now_str,))
         for spot_id, res_id in cursor.fetchall():
             cursor.execute("UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?", (spot_id,))
             cursor.execute("UPDATE Reservations SET status = 'Completed' WHERE id = ?", (res_id,))
         
-        # ۲. تخلیه اجباری جایگاه ۳۰ ثانیه قبل از شروع رزرو (فراری دادن ماشین متفرقه)
+        # 2. Clear each spot 30 seconds before its reservation starts.
         clear_time = (now + timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%S')
         cursor.execute("SELECT spot_id FROM Reservations WHERE status = 'Active' AND start_time > ? AND start_time <= ?", (now_str, clear_time))
         for (spot_id,) in cursor.fetchall():
             cursor.execute("UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?", (spot_id,))
         
-        # ۳. ورود دقیق ماشین کاربرِ رزرو کننده در همان ثانیه شروع
+        # 3. Mark reserved spots occupied as soon as their booking window begins.
         cursor.execute("SELECT spot_id FROM Reservations WHERE status = 'Active' AND start_time <= ? AND end_time > ?", (now_str, now_str))
         for (spot_id,) in cursor.fetchall():
             cursor.execute("UPDATE Parking_Spots SET is_occupied = 1 WHERE id = ?", (spot_id,))
             
-        # ۴. سنسور رندوم (عدم اجازه ورود به جایگاه‌هایی که در ۱ دقیقه آینده رزرو دارند)
+        # 4. Reset spots that are not covered by a currently active reservation.
         cursor.execute("""
             UPDATE Parking_Spots
             SET is_occupied = 0
@@ -159,6 +161,8 @@ def simulate_environment():
             next_demo_entry_at = now + timedelta(seconds=DEMO_CAR_EMPTY_PAUSE_SECONDS)
 
         if demo_spot_id is None and now >= next_demo_entry_at:
+            # Trigger a walk-in animation without assigning a database spot here;
+            # the booking API selects and reserves the actual spot.
             demo_spot_id = -1
             demo_leave_at = now + timedelta(seconds=random.randint(DEMO_CAR_MIN_STAY_SECONDS, DEMO_CAR_MAX_STAY_SECONDS))
             notify_walk_in_arrival()

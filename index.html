@@ -356,6 +356,7 @@
 
         const THREE = { ...ThreeModule, GLTFLoader, OrbitControls };
 
+        // Shared application state connects API updates to the 3D parking scene.
         let loggedInUserId = null;
         const apiUrl = 'http://127.0.0.1:5000/api/spots';
         let previousState = {};
@@ -896,6 +897,7 @@
         }
 
         function initParkingScene() {
+            // Build the ten spaces and retain their coordinates for car animations.
             addDioramaEnvironment();
 
             const base = createRoundedPlane(12.4, 7.4, 0.45, 0.16, 0x6f7780);
@@ -934,6 +936,7 @@
         }
 
         function loadCarMesh(spotId, reservedBy) {
+            // Recolor the GLB body when possible while preserving wheel and glass materials.
             const randomColor = reservedBy ? '#34495e' : carColors[Math.floor(Math.random() * carColors.length)];
             return new Promise((resolve, reject) => {
                 carLoader.load('models/car.glb', (gltf) => {
@@ -1079,6 +1082,7 @@
         }
 
         function animatePath(car, keyframes, duration = 2500) {
+            // Interpolate validated waypoints and always snap to the final point.
             return new Promise((resolve) => {
                 const safePath = normalizePath(keyframes);
                 if (!car || !safePath) {
@@ -1269,6 +1273,7 @@
         }
 
         async function processQueue() {
+            // Serialize movements so cars do not enter or leave simultaneously.
             if (isAnimationRunning || animationQueue.length === 0) return;
             isAnimationRunning = true;
             const task = animationQueue.shift();
@@ -1785,6 +1790,7 @@
         }
 
         function applySpotStatusUpdate(spotId, isOccupied, reservedBy, isInitialLoad = false, source = null) {
+            // Convert sensor transitions into LED changes and queued car animations.
             const id = Number(spotId);
             const isCurrentlyOccupied = Boolean(isOccupied);
             const wasOccupied = previousState[id];

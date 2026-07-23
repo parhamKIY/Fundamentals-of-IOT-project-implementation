@@ -1,14 +1,14 @@
 import sqlite3
 
 def init_database():
-    # ۱. اتصال به فایل دیتابیس (اگر فایل وجود نداشته باشد، ساخته می‌شود)
+    # 1. Connect to the database file, creating it when it does not exist.
     conn = sqlite3.connect('parking.db')
     cursor = conn.cursor()
 
-    # ۲. فعال کردن قابلیت Foreign Key در SQLite
+    # 2. Enable foreign-key enforcement for this SQLite connection.
     cursor.execute("PRAGMA foreign_keys = ON;")
 
-    # ۳. ساخت جدول کاربران
+    # 3. Define the users table.
     create_users_table = """
     CREATE TABLE IF NOT EXISTS Users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,7 +19,7 @@ def init_database():
     );
     """
 
-    # ۴. ساخت جدول فضاهای پارک
+    # 4. Define the parking-spots table.
     create_spots_table = """
     CREATE TABLE IF NOT EXISTS Parking_Spots (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,7 +28,7 @@ def init_database():
     );
     """
 
-    # ۵. ساخت جدول رزروها
+    # 5. Define the reservations table.
     create_reservations_table = """
     CREATE TABLE IF NOT EXISTS Reservations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,16 +43,15 @@ def init_database():
     );
     """
 
-    # ۶. اجرای دستورات SQL
+    # 6. Create any tables that are not already present.
     cursor.execute(create_users_table)
     cursor.execute(create_spots_table)
     cursor.execute(create_reservations_table)
 
-    # ۷. ذخیره تغییرات و بستن اتصال
+    # 7. Persist the schema changes and close the connection.
     conn.commit()
     conn.close()
     
-    # تغییر این خط برای جلوگیری از ارور انکودینگ ویندوز
     print("Database and tables created successfully.")
 
 if __name__ == "__main__":
