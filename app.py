@@ -41,7 +41,23 @@ SPOT_COORDINATES = {
 }
 
 
-def broadcast_spot_status(spot_id, is_occupied, source=None, reserved_by=None):
+def broadcast_spot_status(
+    spot_id,
+    is_occupied,
+    source=None,
+    reserved_by=None,
+    reservation_source=None,
+):
+    if is_occupied and reserved_by is None and reservation_source is None:
+        conn = get_db_connection()
+        try:
+            reserved_by, reservation_source = get_active_reservation_label(
+                conn.cursor(),
+                spot_id,
+            )
+        finally:
+            conn.close()
+
     socketio.emit(
         "spot_status_update",
         {
@@ -49,6 +65,7 @@ def broadcast_spot_status(spot_id, is_occupied, source=None, reserved_by=None):
             "is_occupied": bool(is_occupied),
             "source": source,
             "reserved_by": reserved_by,
+            "reservation_source": reservation_source,
         },
     )
 
@@ -58,6 +75,31 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     ensure_schema(conn)
     return conn
+
+
+def get_active_reservation_label(cursor, spot_id):
+    reservation = cursor.execute(
+        """
+        SELECT u.username
+        FROM Reservations r
+        JOIN Users u ON u.id = r.user_id
+        WHERE r.spot_id = ?
+          AND r.status = 'Active'
+          AND r.start_time <= datetime('now', 'localtime')
+          AND r.end_time >= datetime('now', 'localtime')
+        ORDER BY r.start_time DESC
+        LIMIT 1;
+        """,
+        (spot_id,),
+    ).fetchone()
+    if not reservation:
+        return None, None
+
+    username = reservation["username"] or ""
+    if username.startswith("WALK-IN-"):
+        return None, None
+    reservation_source = "sensor_simulator" if username.startswith("SIM-") else "user_panel"
+    return username, reservation_source
 
 
 def ensure_schema(conn):
@@ -365,6 +407,13 @@ def get_parking_spots():
                 "floor": s["floor"],
                 "is_occupied": bool(s["is_occupied"]),
                 "reserved_by": None if (s["username"] or "").startswith("WALK-IN-") else s["username"],
+                "reservation_source": (
+                    None
+                    if not s["username"] or s["username"].startswith("WALK-IN-")
+                    else "sensor_simulator"
+                    if s["username"].startswith("SIM-")
+                    else "user_panel"
+                ),
             }
             for s in spots
         ]
@@ -731,7 +780,11 @@ def admin_cancel_reservation(reservation_id):
     try:
         cursor.execute("BEGIN IMMEDIATE;")
         reservation = cursor.execute(
-            "SELECT spot_id FROM Reservations WHERE id = ? AND status = 'Active';",
+            """
+            SELECT spot_id, start_time, end_time
+            FROM Reservations
+            WHERE id = ? AND status = 'Active';
+            """,
             (reservation_id,),
         ).fetchone()
         if not reservation:
@@ -742,24 +795,34 @@ def admin_cancel_reservation(reservation_id):
             "UPDATE Reservations SET status = 'Cancelled' WHERE id = ?;",
             (reservation_id,),
         )
-        cursor.execute(
-            """
-            SELECT 1 FROM Reservations
-            WHERE status = 'Active'
-            AND spot_id = ?
-            AND start_time <= datetime('now', 'localtime')
-            AND end_time > datetime('now', 'localtime')
-            LIMIT 1;
-            """,
-            (reservation["spot_id"],),
-        )
-        if not cursor.fetchone():
+        now_str = datetime.now().strftime(TIME_FORMAT)
+        spot_released = False
+        if reservation["start_time"] <= now_str < reservation["end_time"]:
             cursor.execute(
-                "UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?;",
-                (reservation["spot_id"],),
+                """
+                SELECT 1 FROM Reservations
+                WHERE status = 'Active'
+                AND spot_id = ?
+                AND start_time <= ?
+                AND end_time > ?
+                LIMIT 1;
+                """,
+                (reservation["spot_id"], now_str, now_str),
             )
+            if not cursor.fetchone():
+                cursor.execute(
+                    "UPDATE Parking_Spots SET is_occupied = 0 WHERE id = ?;",
+                    (reservation["spot_id"],),
+                )
+                spot_released = True
 
         conn.commit()
+        if spot_released:
+            broadcast_spot_status(
+                reservation["spot_id"],
+                False,
+                source="admin_cancellation",
+            )
         return jsonify({"message": "Reservation cancelled"}), 200
     except sqlite3.Error as e:
         conn.rollback()

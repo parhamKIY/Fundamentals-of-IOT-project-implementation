@@ -193,6 +193,9 @@
             box-shadow: 0 8px 18px rgba(38,55,70,0.14);
             z-index: 3;
         }
+        .car-name-label.user-panel {
+            color: #087f5b;
+        }
         #available-spots-container { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 12px; }
         @media (max-width: 1280px) {
             .app-grid { grid-template-columns: 1fr; }
@@ -988,11 +991,14 @@
             });
         }
 
-        function setCarLabel(spotId, car, reservedBy) {
+        function setCarLabel(spotId, car, reservedBy, reservationSource = null) {
             removeCarLabel(spotId);
             if (!reservedBy) return;
             const label = document.createElement('div');
             label.className = 'car-name-label';
+            if (reservationSource === 'user_panel') {
+                label.classList.add('user-panel');
+            }
             label.innerText = reservedBy;
             sceneShell.appendChild(label);
             carLabels.set(spotId, { label, car });
@@ -1022,15 +1028,18 @@
             });
         }
 
-        async function setCarStatic(spotId, reservedBy) {
-            if (carObjects.has(spotId)) return;
+        async function setCarStatic(spotId, reservedBy, reservationSource = null) {
+            if (carObjects.has(spotId)) {
+                setCarLabel(spotId, carObjects.get(spotId), reservedBy, reservationSource);
+                return;
+            }
             const car = await loadCarMesh(spotId, reservedBy);
             const layout = spotLayout[spotId];
             car.position.set(layout.x, CAR_FIXED_Y, layout.z);
             car.rotation.y = layout.rotation;
             scene.add(car);
             carObjects.set(spotId, car);
-            setCarLabel(spotId, car, reservedBy);
+            setCarLabel(spotId, car, reservedBy, reservationSource);
         }
 
         function easeInOut(t) {
@@ -1291,7 +1300,7 @@
                     const car = await loadCarMesh(task.spotId, task.reservedBy);
                     scene.add(car);
                     carObjects.set(task.spotId, car);
-                    setCarLabel(task.spotId, car, task.reservedBy);
+                    setCarLabel(task.spotId, car, task.reservedBy, task.reservationSource);
                     await animatePath(car, [
                         ENTRY_POINT,
                         { x: layout.x, z: 0, r: Math.PI / 2 },
@@ -1774,7 +1783,14 @@
                 if (!response.ok) throw new Error('Network error');
                 const spots = await response.json();
                 spots.forEach(spot => {
-                    applySpotStatusUpdate(spot.id, spot.is_occupied, spot.reserved_by, true);
+                    applySpotStatusUpdate(
+                        spot.id,
+                        spot.is_occupied,
+                        spot.reserved_by,
+                        true,
+                        null,
+                        spot.reservation_source
+                    );
                 });
                 updateAvailableCount();
                 processQueue();
@@ -1789,7 +1805,14 @@
             document.getElementById('available-spots').innerText = availableCount;
         }
 
-        function applySpotStatusUpdate(spotId, isOccupied, reservedBy, isInitialLoad = false, source = null) {
+        function applySpotStatusUpdate(
+            spotId,
+            isOccupied,
+            reservedBy,
+            isInitialLoad = false,
+            source = null,
+            reservationSource = null
+        ) {
             // Convert sensor transitions into LED changes and queued car animations.
             const id = Number(spotId);
             const isCurrentlyOccupied = Boolean(isOccupied);
@@ -1802,11 +1825,15 @@
                 return;
             }
 
-            if (wasOccupied === undefined && isCurrentlyOccupied) {
-                setCarStatic(id, reservedBy);
-            } else if (!isInitialLoad && isCurrentlyOccupied && wasOccupied === false) {
-                animationQueue.push({ type: 'ENTRY', spotId: id, reservedBy });
-            } else if (!isInitialLoad && !isCurrentlyOccupied && wasOccupied === true) {
+            if (isInitialLoad && isCurrentlyOccupied && !carObjects.has(id)) {
+                setCarStatic(id, reservedBy, reservationSource);
+            } else if (wasOccupied === undefined && isCurrentlyOccupied) {
+                setCarStatic(id, reservedBy, reservationSource);
+            } else if (isCurrentlyOccupied && wasOccupied === false) {
+                animationQueue.push({ type: 'ENTRY', spotId: id, reservedBy, reservationSource });
+            } else if (isCurrentlyOccupied && carObjects.has(id)) {
+                setCarLabel(id, carObjects.get(id), reservedBy, reservationSource);
+            } else if (!isCurrentlyOccupied && wasOccupied === true) {
                 animationQueue.push({ type: 'EXIT', spotId: id });
             }
 
@@ -1814,8 +1841,21 @@
         }
 
         const socket = window.io('http://127.0.0.1:5000');
-        socket.on('spot_status_update', ({ spot_id, is_occupied, reserved_by, source }) => {
-            applySpotStatusUpdate(spot_id, is_occupied, reserved_by, false, source);
+        socket.on('spot_status_update', ({
+            spot_id,
+            is_occupied,
+            reserved_by,
+            source,
+            reservation_source
+        }) => {
+            applySpotStatusUpdate(
+                spot_id,
+                is_occupied,
+                reserved_by,
+                false,
+                source,
+                reservation_source
+            );
             updateAvailableCount();
             processQueue();
         });
